@@ -1,0 +1,6 @@
+source -s abc.rc
+read_verilog bar.v
+help
+stats
+stat
+exit

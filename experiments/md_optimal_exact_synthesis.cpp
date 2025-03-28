@@ -624,7 +624,7 @@ void md_optimal_exact_synthesis_gendb( std::string const filename )
     {
     	db_md << delay_each << " ";
     }
-    //db_md << mc << " ";
+    db_md << 0 << " ";
     //db_md << md << " ";
     xag_md_opt.foreach_gate( [&]( auto const& f ) {
     	xag_md_opt.foreach_fanin( f, [&]( auto const& fi ) {
