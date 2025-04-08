@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <vector>
 
 #include "circuit_validator.hpp"
 #include "cut_enumeration.hpp"
@@ -21,6 +22,14 @@
 
 namespace mockturtle
 {
+
+	struct ParsedSeqn
+	{
+	  mockturtle::xag_network ntk;
+	  std::vector<std::pair<int, bool>> node2ind;
+	  std::vector<std::string> innodes;
+	  std::vector<std::string> outnodes;
+	};
 
 struct fhe_rule_miner_params
 {
@@ -53,8 +62,8 @@ namespace detail
 class fhe_rule_miner_impl
 {
 public:
-	fhe_rule_miner_impl( xag_network const& ntk, std::string const& dbname, fhe_rule_miner_params const& ps, fhe_rule_miner_stats& st )
-		: _ntk( ntk ), _ps( ps ), _st( st )
+	fhe_rule_miner_impl( ParsedSeqn const& seqn, std::string const& dbname, fhe_rule_miner_params const& ps, fhe_rule_miner_stats& st )
+		: _ntk( seqn.ntk ), _node2ind(seqn.node2ind), _ps( ps ), _st( st )
 	{
 		build_db( dbname );
 	}
@@ -124,7 +133,7 @@ public:
 	}
 
 private:
-	void write_network_expr( xag_network const& ntk, std::ofstream& file )
+void write_network_expr( xag_network const& ntk, std::vector<xag_network::node> const& leaves, xag_network::node const& root, std::ofstream& file )
 	{
 		if ( !file.is_open() )
 		{
@@ -133,13 +142,18 @@ private:
 		}
 
 		node_map<std::string, xag_network> expr{ ntk };
-		ntk.clear_visited();
 
 		ntk.foreach_pi( [&]( auto const& pi, uint32_t index ) {
-			expr[pi] = 'a' + index;
+			auto &[pi_ind, pi_comp] = _node2ind[_ntk.node_to_index( leaves[index] )];
+			expr[pi] = std::to_string( pi_ind );
+			if (pi_comp) {
+				expr[pi] = "(! " + expr[pi] + ")";
+			}
 		} );
 
-		topo_view<xag_network>( ntk ).foreach_node( [&]( auto const& n ) {
+		topo_view<xag_network> ntk_topo( ntk );
+    	ntk_topo.clear_visited();
+		ntk_topo.foreach_node( [&]( auto const& n ) {
 			if ( ntk.is_constant( n ) || ntk.is_pi( n ) )
 			{
 				return true;
@@ -158,45 +172,48 @@ private:
 				assert( expr[ni] != "" );
 
 				operands[index] = expr[ni];
-				if ( !ntk.is_pi( ni ) )
-				{
-					operands[index] = "( " + operands[index] + " )";
-				}
 				if ( ntk.is_complemented( f ) )
 				{
-					operands[index] = "!" + operands[index];
+					operands[index] = "(! " + operands[index] + ")";
 				}
 			} );
 
 			if ( ntk.is_and( n ) )
 			{
-				expr[n] = operands[0] + " * " + operands[1];
+				expr[n] = "(* " + operands[0] + " " + operands[1] + ")";
 			}
 			else
 			{
-				expr[n] = operands[1] + " ^ " + operands[0];
+				expr[n] = "(^ " + operands[1] + " " + operands[0] + ")";
 			}
 
 			return true;
 		} );
 
 		assert( ntk.num_pos() == 2u );
-		ntk.foreach_po( [&]( auto const& po, uint32_t index ) {
-			if ( ntk.is_complemented( po ) )
-			{
-				file << "!( " << expr[ntk.get_node( po )] << ")";
-			}
-			else
-			{
-				file << expr[ntk.get_node( po )];
-			}
+		bool root_comp = false;
+		ntk.foreach_po( [&]( auto const& po, uint32_t index ) {	
+			if (index != 0u) {
+				if ( ntk.is_complemented( po ) )
+				{
+					file << "(! " << expr[ntk.get_node( po )] << ")";
+				}
+				else
+				{
+					file << expr[ntk.get_node( po )];
+				}
+			}	
+			
 
-			if ( index == 0u )
-			{
-				file << " = ";
-			}
-			else
-			{
+			if (index == 0u) {
+				int root_ind;
+				std::tie(root_ind, root_comp) = _node2ind[_ntk.node_to_index(root)];
+				file << root_ind << "=>";
+				if (root_comp) {
+					file << "(! ";
+				}
+			} else {
+				if (root_comp) file << ')';
 				file << '\n';
 			}
 		} );
@@ -320,7 +337,9 @@ private:
 		std::optional<bool> eq = validator.validate( po_orig, po_opt );
 		assert( eq && ( *eq ) );
 
-		write_network_expr( ntk_cut, file );
+		assert(!_ntk.is_complemented(root));
+
+		write_network_expr( ntk_cut, leaves, _ntk.get_node(root), file);
 
 		return true;
 	}
@@ -420,6 +439,7 @@ private:
 
 private:
 	xag_network const& _ntk;
+	std::vector<std::pair<int, bool>> const& _node2ind;
 	xag_network _ntk_db;
 	std::vector<xag_network::signal> _db_pis{ 5u };
 	std::vector<std::unordered_map<uint32_t, xag_network::signal>> _db{ 4u };
@@ -430,10 +450,10 @@ private:
 
 } /* namespace detail */
 
-void fhe_rule_miner( xag_network const& ntk, std::string const& dbname, std::string const& filename, fhe_rule_miner_params const& ps = {}, fhe_rule_miner_stats* pst = nullptr )
+void fhe_rule_miner( ParsedSeqn const& seqn, std::string const& dbname, std::string const& filename, fhe_rule_miner_params const& ps = {}, fhe_rule_miner_stats* pst = nullptr )
 {
 	fhe_rule_miner_stats st{};
-	detail::fhe_rule_miner_impl( ntk, dbname, ps, st ).run( filename );
+	detail::fhe_rule_miner_impl( seqn, dbname, ps, st ).run( filename );
 	if ( st.num_rules >= ps.num_rules_limit )
 	{
 		fmt::print( "[i] Early termination since sufficient rules have been mined\n" );
