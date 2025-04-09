@@ -1,9 +1,60 @@
+#include <cstdlib>
 #include <experiments.hpp>
 #include <lorina/verilog.hpp>
 #include <mockturtle/algorithms/fhe_rule_miner.hpp>
 #include <mockturtle/io/verilog_reader.hpp>
+#include <mockturtle/algorithms/balancing.hpp>
+#include <mockturtle/algorithms/balancing/esop_balancing.hpp>
+#include <mockturtle/io/write_verilog.hpp>
+#include <mockturtle/utils/cost_functions.hpp>
 
-using namespace mockturtle;
+
+#include <unistd.h>
+#include <variant>
+
+//std::string bench_path( std::string const& benchmark_name )
+//{
+//  return fmt::format( "{}BEST_RESULTS/EPFL/{}.v", EXPERIMENTS_PATH, benchmark_name );
+//}
+std::string bench_path( std::string const& benchmark_name )
+{
+  return fmt::format( "{}lobster_v_mdmc/{}.v", EXPERIMENTS_PATH, benchmark_name );
+}
+
+static const std::string LOBSTER_benchmarks[] = {
+    "bar", "bsort", "cardio", "cavlc", "ctrl", "dec", "dsort", "hd01", "hd02", "hd03", "hd04",
+	 "hd05", "hd06", "hd07", "hd08", "hd09", "hd10", "hd11", "hd12", "i2c", 
+	 "int2float", "isort", "msort", "osort", "router" };
+std::vector<std::string> lobster_benchmarks()
+{
+  std::vector<std::string> result;
+  for ( auto i = 0u; i < 25u; ++i )
+  {
+    result.emplace_back( LOBSTER_benchmarks[i] );
+  }
+
+  return result;
+}
+
+namespace details
+{
+
+template<class Ntk>
+struct num_and
+{
+	uint32_t operator()( Ntk const& ntk, typename Ntk::node const& n ) const
+	{
+		return ( ntk.is_and( n ) ? 1u : 0u );
+	}
+};
+
+} /* namespace details */
+
+struct ParsedSeqn {
+    mockturtle::xag_network ntk;
+    std::vector<std::string> innodes;
+    std::vector<std::string> outnodes;
+};
 
 void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
     std::ifstream seqn_f;
@@ -11,10 +62,7 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
     std::string line;
     std::unordered_map<std::string, int> sig_name_lookup;
     std::vector<mockturtle::xag_network::signal> signals;
-    assert(ps.ntk.size() == 1);
-    ps.node2ind.push_back(std::make_pair(0, false));
     int i = 0;
-    int inps_size = 0;
     while (std::getline( seqn_f, line )) {
         if (i == 0) {
             int pos = 0;
@@ -27,11 +75,7 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
             sig_name_lookup[line] = ps.innodes.size();
             ps.innodes.push_back(line);
             signals.resize(ps.innodes.size());
-            std::generate( signals.begin(), signals.end(), [&]() { 
-                ps.node2ind.push_back(std::make_pair(ps.node2ind.size(), false));
-                return ps.ntk.create_pi(); 
-            } );
-            inps_size = ps.node2ind.size();
+            std::generate( signals.begin(), signals.end(), [&]() { return ps.ntk.create_pi(); } );
 
             int true_s  = signals.size();
             signals.push_back(ps.ntk.get_constant( true ));
@@ -61,7 +105,6 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
             std::string opB = line;
 
             int sig_ind = 0;
-			int old_size = ps.ntk.size();
             switch (op) {
                 case 'w': {
                     assert(sig_name_lookup.find(opA) != sig_name_lookup.end());
@@ -74,7 +117,7 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
                     mockturtle::xag_network::signal &sigA = signals[sig_name_lookup[opA]];
                     mockturtle::xag_network::signal &sigB = signals[sig_name_lookup[opB]];
                     sig_ind = signals.size();
-                    signals.emplace_back(ps.ntk.create_xor( sigA, sigB ));
+                    signals.emplace_back( ps.ntk.create_xor( sigA, sigB ) );
                     break;
                 }
                 case '*': {
@@ -91,7 +134,6 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
                     mockturtle::xag_network::signal &sigA = signals[sig_name_lookup[opA]];
                     sig_ind = signals.size();
                     signals.emplace_back( ps.ntk.create_not( sigA ) );
-                    assert(ps.ntk.size() == old_size);
                     break;
                 }
                 default: {
@@ -99,34 +141,17 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
                     break;
                 }
             }
-			if (ps.ntk.size() == old_size + 1) {
-				auto &sig = signals.back();
-				bool sig_comp = ps.ntk.is_complemented(sig);
-				ps.node2ind.push_back(std::make_pair(i - 2 + inps_size, sig_comp));
-			} else {
-				assert(ps.ntk.size() == old_size);
-			}
             sig_name_lookup[out] = sig_ind;
-			std::cout << out << "->" << sig_ind << "," << signals[sig_ind].data << std::endl;
         }
          
         i++;
     }
 
-	if (ps.node2ind.size() != ps.ntk.size()) {
-		std::cerr << ps.node2ind.size() << std::endl;
-		std::cerr << "bad path: " << seqn_path << std::endl;
-	}
-    assert(ps.node2ind.size() == ps.ntk.size());
-	// take 1 away for input line, 1 away for output
-	// add number of inputs (true/false included)
-	std::cerr << "ind2eclass.size() = " << i - 2 + inps_size << "\n"; 
     for (auto &po : ps.outnodes) {
         assert(sig_name_lookup.find(po) != sig_name_lookup.end());
         ps.ntk.create_po(signals[sig_name_lookup[po]]);
     }
 }
-
 
 std::string print_fanin(ParsedSeqn &ps, const mockturtle::xag_network::signal &fi) {
     std::string op = fi.complement ? "!" : "";
@@ -191,40 +216,99 @@ void write_eqn(const char *eqn_path, ParsedSeqn &ps) {
     });
 }
 
+void opt_benchmark(std::string &in_path, std::string &out_path, const int limit) {
+    ParsedSeqn seqn;
+    mockturtle::xag_network &init_xag = seqn.ntk;
+
+    if (in_path[in_path.length()-1] == 'v') {
+        if ( lorina::read_verilog( in_path, mockturtle::verilog_reader( init_xag ) ) != lorina::return_code::success )
+        {
+            std::cerr << "[e] could not parse verilog file " << in_path << "\n";
+            return;
+        }
+    } else {
+        parse_seqn(in_path.c_str(), seqn);
+    }
+    
+    mockturtle::xag_network xag_md_opt = init_xag;
+    //fmt::print( "[i] processing {}\n", in_path );
+    mockturtle::cut_enumeration_params ps;
+    ps.cut_size = 6u;
+    ps.verbose = false;
+    ps.very_verbose = false;
+    mockturtle::balancing_params balance_ps;
+    balance_ps.cut_enumeration_ps = ps;
+    balance_ps.only_on_critical_path = true;
+    balance_ps.progress = true;
+
+    int md_before_all = 0;
+    int mc_before_all = 0;
+    int md_after = 0;
+    int mc_after = 0;
+    int i = 0;
+    for (i = 0; i < limit; i++) {
+
+        mockturtle::depth_view<mockturtle::xag_network, details::num_and<mockturtle::xag_network>, false> xag_new_md{ xag_md_opt };
+		md_after = xag_new_md.depth();
+		mc_after = mockturtle::costs<mockturtle::xag_network, details::num_and<mockturtle::xag_network>>( xag_md_opt );
+
+        if (i == 0) {
+            md_before_all = md_after;
+            mc_before_all = mc_after;
+            std::cout << "[i] start md, mc: " << md_before_all << "," << mc_before_all << "\n";
+        }
+
+        if (md_after < md_before_all || (md_after == md_before_all && (mc_after < mc_before_all))) {
+        //if ((md_after * md_after * mc_after) < (md_before_all * md_before_all * mc_before_all)) {
+            std::cout << "[i] found better circuit after " << i << " iterations\n";
+            std::cout << "[i] md, mc: " << md_before_all << "," << mc_before_all << "->" << md_after << "," << mc_after << "\n";
+            break;
+        }
+
+        xag_md_opt = mockturtle::balancing<mockturtle::xag_network, details::num_and<mockturtle::xag_network>>( xag_md_opt, mockturtle::esop_rebalancing<mockturtle::xag_network>{}, balance_ps );
+    }
+
+    if (i != limit) {
+        seqn.ntk = xag_md_opt;
+    } else if (limit != 0) {
+        std::cout << "[i] gave up after " << i << " iterations\n";
+    }   
+
+    write_eqn(out_path.c_str(), seqn);
+}
+
 int main(int argc, char **argv)
 {
-	using namespace experiments;
+  using namespace mockturtle;
+  using namespace experiments;
 
-	if (argc != 3) {
-		std::cerr << "[e] expected path to input seqn & output rules\n";
-		exit(EXIT_FAILURE);
-	}
-	const char* seqn_path  = argv[1];
-	const char* rules_path = argv[2];
+    opterr = 0;
+    int benchmarks_mode = 0;
+    int skip_opt = 0;
 
-	ParsedSeqn seqn;
-	parse_seqn(seqn_path, seqn);
+    int c;
+    while ((c = getopt(argc,argv,"bs")) != -1) {
+        switch (c) {
+            case 'b': benchmarks_mode = 1; break;
+            case 's': skip_opt = 1; break;
+        }
+    }
 
-	write_eqn("out.eqn", seqn);
-
-	fmt::print( "[i] processing {}\n", seqn_path );
-
-	fhe_rule_miner_params ps{};
-	ps.cut_enum_ps.cut_size = 5u;
-	ps.cut_enum_ps.cut_limit = 25u; // limitations on amount of cuts enumerated at each root
-	ps.cut_enum_ps.verbose = false;
-	ps.cut_enum_ps.very_verbose = false;
-	ps.num_rules_limit = 500u; // limitations on total amount of mined rules
-	ps.num_node_rules_limit = 2u; // limitation on amount of rules mined at each root
-	ps.progress = false;
-	ps.verbose = false;
-	ps.very_verbose = false;
-
-	fhe_rule_miner_stats st{};
-
-	std::string dbname = "db_fhe_5";
-
-	fhe_rule_miner( seqn, dbname, rules_path, ps, &st );
-
+    if (benchmarks_mode) {
+        for ( auto const& benchmark : lobster_benchmarks() )
+        {
+            std::string filename = fmt::format( "esop_out/{}.v", benchmark );
+            std::string infile = bench_path( benchmark );
+            opt_benchmark(infile, filename, 5);
+        }
+    } else {
+        if (argc - optind < 2) {
+            std::cerr << "[e] expected path to input file & output eqn path\n";
+            exit(EXIT_FAILURE);
+        }
+        std::string in_path(argv[optind]);
+        std::string out_path(argv[optind+1]);
+        opt_benchmark(in_path, out_path, skip_opt ? 0 : 5);
+    }
   return 0;
 }
