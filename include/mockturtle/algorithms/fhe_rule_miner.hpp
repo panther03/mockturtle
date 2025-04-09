@@ -140,7 +140,7 @@ void write_network_expr( xag_network const& ntk, std::vector<xag_network::node> 
 			fmt::print( "[e] File not open!" );
 			abort();
 		}
-		file << "mdmc" << cnt << ":";
+		//file << "mdmc" << cnt << ":";
 		node_map<std::string, xag_network> expr{ ntk };
 
 		ntk.foreach_pi( [&]( auto const& pi, uint32_t index ) {

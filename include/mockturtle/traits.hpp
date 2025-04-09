@@ -1998,6 +1998,21 @@ template<class Ntk, typename T>
 inline constexpr bool has_compute_inplace_v = has_compute_inplace<Ntk, T>::value;
 #pragma endregion
 
+#pragma region has_node_union
+template<class Ntk, class = void>
+struct has_node_union : std::false_type
+{
+};
+
+template<class Ntk>
+struct has_node_union<Ntk, std::void_t<decltype( std::declval<Ntk>().node_union( std::declval<node<Ntk> const&>(), std::declval<signal<Ntk> const&>()) )>> : std::true_type
+{
+};
+
+template<class Ntk>
+inline constexpr bool has_node_union_v = has_node_union<Ntk>::value;
+#pragma endregion
+
 #pragma region has_has_mapping
 template<class Ntk, class = void>
 struct has_has_mapping : std::false_type

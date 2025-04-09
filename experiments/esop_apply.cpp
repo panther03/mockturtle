@@ -5,8 +5,13 @@
 #include <mockturtle/io/verilog_reader.hpp>
 #include <mockturtle/algorithms/balancing.hpp>
 #include <mockturtle/algorithms/balancing/esop_balancing.hpp>
+#include <mockturtle/algorithms/cleanup.hpp>
+#include <mockturtle/algorithms/xag_resub.hpp>
+#include <mockturtle/views/depth_view.hpp>
+#include <mockturtle/views/fanout_view.hpp>
 #include <mockturtle/io/write_verilog.hpp>
 #include <mockturtle/utils/cost_functions.hpp>
+#include <mockturtle/networks/tracing_xag.hpp>
 
 
 #include <unistd.h>
@@ -50,18 +55,21 @@ struct num_and
 
 } /* namespace details */
 
+using xag_ntk = mockturtle::tracing_xag_network;
+
 struct ParsedSeqn {
-    mockturtle::xag_network ntk;
+    xag_ntk ntk;
     std::vector<std::string> innodes;
     std::vector<std::string> outnodes;
 };
 
 void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
+    ps.ntk.enable_tracing();
     std::ifstream seqn_f;
     seqn_f.open(seqn_path, std::ios::in);
     std::string line;
     std::unordered_map<std::string, int> sig_name_lookup;
-    std::vector<mockturtle::xag_network::signal> signals;
+    std::vector<xag_ntk::signal> signals;
     int i = 0;
     while (std::getline( seqn_f, line )) {
         if (i == 0) {
@@ -114,8 +122,8 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
                 case '^': {
                     assert(sig_name_lookup.find(opA) != sig_name_lookup.end());
                     assert(sig_name_lookup.find(opB) != sig_name_lookup.end());
-                    mockturtle::xag_network::signal &sigA = signals[sig_name_lookup[opA]];
-                    mockturtle::xag_network::signal &sigB = signals[sig_name_lookup[opB]];
+                    xag_ntk::signal &sigA = signals[sig_name_lookup[opA]];
+                    xag_ntk::signal &sigB = signals[sig_name_lookup[opB]];
                     sig_ind = signals.size();
                     signals.emplace_back( ps.ntk.create_xor( sigA, sigB ) );
                     break;
@@ -123,15 +131,15 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
                 case '*': {
                     assert(sig_name_lookup.find(opA) != sig_name_lookup.end());
                     assert(sig_name_lookup.find(opB) != sig_name_lookup.end());
-                    mockturtle::xag_network::signal &sigA = signals[sig_name_lookup[opA]];
-                    mockturtle::xag_network::signal &sigB = signals[sig_name_lookup[opB]];
+                    xag_ntk::signal &sigA = signals[sig_name_lookup[opA]];
+                    xag_ntk::signal &sigB = signals[sig_name_lookup[opB]];
                     sig_ind = signals.size();
                     signals.emplace_back( ps.ntk.create_and( sigA, sigB ) );
                     break;
                 }
                 case '!': {
                     assert(sig_name_lookup.find(opA) != sig_name_lookup.end());
-                    mockturtle::xag_network::signal &sigA = signals[sig_name_lookup[opA]];
+                    xag_ntk::signal &sigA = signals[sig_name_lookup[opA]];
                     sig_ind = signals.size();
                     signals.emplace_back( ps.ntk.create_not( sigA ) );
                     break;
@@ -153,7 +161,7 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
     }
 }
 
-std::string print_fanin(ParsedSeqn &ps, const mockturtle::xag_network::signal &fi) {
+std::string print_fanin(ParsedSeqn &ps, const xag_ntk::signal &fi) {
     std::string op = fi.complement ? "!" : "";
     if (ps.ntk.is_pi(fi.index)) {
         op.append(ps.innodes[ps.ntk.pi_index(fi.index)]);
@@ -218,7 +226,7 @@ void write_eqn(const char *eqn_path, ParsedSeqn &ps) {
 
 void opt_benchmark(std::string &in_path, std::string &out_path, const int limit) {
     ParsedSeqn seqn;
-    mockturtle::xag_network &init_xag = seqn.ntk;
+    xag_ntk &init_xag = seqn.ntk;
 
     if (in_path[in_path.length()-1] == 'v') {
         if ( lorina::read_verilog( in_path, mockturtle::verilog_reader( init_xag ) ) != lorina::return_code::success )
@@ -230,7 +238,7 @@ void opt_benchmark(std::string &in_path, std::string &out_path, const int limit)
         parse_seqn(in_path.c_str(), seqn);
     }
     
-    mockturtle::xag_network xag_md_opt = init_xag;
+    xag_ntk xag_md_opt = init_xag;
     //fmt::print( "[i] processing {}\n", in_path );
     mockturtle::cut_enumeration_params ps;
     ps.cut_size = 6u;
@@ -239,7 +247,7 @@ void opt_benchmark(std::string &in_path, std::string &out_path, const int limit)
     mockturtle::balancing_params balance_ps;
     balance_ps.cut_enumeration_ps = ps;
     balance_ps.only_on_critical_path = true;
-    balance_ps.progress = true;
+    balance_ps.progress = false;
 
     int md_before_all = 0;
     int mc_before_all = 0;
@@ -248,9 +256,9 @@ void opt_benchmark(std::string &in_path, std::string &out_path, const int limit)
     int i = 0;
     for (i = 0; i < limit; i++) {
 
-        mockturtle::depth_view<mockturtle::xag_network, details::num_and<mockturtle::xag_network>, false> xag_new_md{ xag_md_opt };
+        mockturtle::depth_view<xag_ntk, details::num_and<xag_ntk>, false> xag_new_md{ xag_md_opt };
 		md_after = xag_new_md.depth();
-		mc_after = mockturtle::costs<mockturtle::xag_network, details::num_and<mockturtle::xag_network>>( xag_md_opt );
+		mc_after = mockturtle::costs<xag_ntk, details::num_and<xag_ntk>>( xag_md_opt );
 
         if (i == 0) {
             md_before_all = md_after;
@@ -265,7 +273,19 @@ void opt_benchmark(std::string &in_path, std::string &out_path, const int limit)
             break;
         }
 
-        xag_md_opt = mockturtle::balancing<mockturtle::xag_network, details::num_and<mockturtle::xag_network>>( xag_md_opt, mockturtle::esop_rebalancing<mockturtle::xag_network>{}, balance_ps );
+        mockturtle::resubstitution_params rs_ps;
+        mockturtle::resubstitution_stats rs_st;
+        rs_ps.max_pis = 8u;
+        rs_ps.max_inserts = 1u;
+        rs_ps.progress = false;
+    
+        mockturtle::depth_view depth_xag{ xag_md_opt };
+        mockturtle::fanout_view fanout_xag{ depth_xag };
+    
+        uint32_t const size_before = fanout_xag.num_gates();
+        xag_resubstitution( fanout_xag, rs_ps, &rs_st );
+        xag_md_opt = cleanup_dangling( xag_md_opt );
+        //xag_md_opt = mockturtle::balancing<xag_ntk, details::num_and<xag_ntk>>( xag_md_opt, mockturtle::esop_rebalancing<xag_ntk>{}, balance_ps );
     }
 
     if (i != limit) {

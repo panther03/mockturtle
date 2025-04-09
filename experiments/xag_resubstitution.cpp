@@ -27,7 +27,7 @@
 #include <mockturtle/algorithms/cleanup.hpp>
 #include <mockturtle/algorithms/xag_resub.hpp>
 #include <mockturtle/io/aiger_reader.hpp>
-#include <mockturtle/networks/xag.hpp>
+#include <mockturtle/networks/tracing_xag.hpp>
 #include <mockturtle/views/depth_view.hpp>
 #include <mockturtle/views/fanout_view.hpp>
 
@@ -43,15 +43,17 @@ int main()
   experiment<std::string, uint32_t, uint32_t, float, bool>
       exp( "xag_resubstitution", "benchmark", "size_before", "size_after", "runtime", "equivalent" );
 
-  for ( auto const& benchmark : epfl_benchmarks() )
+  for ( auto const& benchmark : epfl_benchmarks(epfl_fhe) )
   {
     fmt::print( "[i] processing {}\n", benchmark );
 
-    xag_network xag;
+    tracing_xag_network xag;
+    xag.enable_tracing();
     if ( lorina::read_aiger( benchmark_path( benchmark ), aiger_reader( xag ) ) != lorina::return_code::success )
     {
       continue;
     }
+
 
     resubstitution_params ps;
     resubstitution_stats st;

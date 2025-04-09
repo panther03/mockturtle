@@ -162,6 +162,9 @@ public:
 
   void substitute_node( node const& old_node, signal const& new_signal )
   {
+    if constexpr ( has_node_union_v<Ntk> ) {
+      Ntk::node_union(old_node, new_signal);
+    }
     if ( Ntk::get_node( new_signal ) == old_node && !Ntk::is_complemented( new_signal ) )
       return;
 

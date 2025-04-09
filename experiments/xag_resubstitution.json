@@ -1,0 +1,56 @@
+[
+  {
+    "entries": [
+      {
+        "benchmark": "bar",
+        "equivalent": true,
+        "runtime": 0.49514129757881165,
+        "size_after": 3336,
+        "size_before": 3336
+      },
+      {
+        "benchmark": "cavlc",
+        "equivalent": true,
+        "runtime": 0.3881683647632599,
+        "size_after": 674,
+        "size_before": 693
+      },
+      {
+        "benchmark": "ctrl",
+        "equivalent": true,
+        "runtime": 0.08045954257249832,
+        "size_after": 107,
+        "size_before": 174
+      },
+      {
+        "benchmark": "dec",
+        "equivalent": true,
+        "runtime": 0.17348316311836243,
+        "size_after": 304,
+        "size_before": 304
+      },
+      {
+        "benchmark": "i2c",
+        "equivalent": true,
+        "runtime": 0.16281871497631073,
+        "size_after": 1265,
+        "size_before": 1342
+      },
+      {
+        "benchmark": "int2float",
+        "equivalent": true,
+        "runtime": 0.0651373341679573,
+        "size_after": 236,
+        "size_before": 260
+      },
+      {
+        "benchmark": "router",
+        "equivalent": true,
+        "runtime": 0.0361630842089653,
+        "size_after": 257,
+        "size_before": 257
+      }
+    ],
+    "version": "e101cbf"
+  }
+]

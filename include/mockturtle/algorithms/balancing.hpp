@@ -117,6 +117,12 @@ struct balancing_impl
   Ntk run()
   {
     Ntk dest;
+    // lazy
+    bool is_tracing_ntk = false;
+    if constexpr ( has_node_union_v<Ntk> ) {
+      is_tracing_ntk = true;
+      dest.enable_tracing();
+    }
     node_map<arrival_time_pair<Ntk>, Ntk> old_to_new( ntk_ );
 
     /* input arrival times and mapping */
@@ -130,7 +136,7 @@ struct balancing_impl
     } );
 
     std::shared_ptr<depth_view<Ntk, CostFn>> depth_ntk;
-    if ( ps_.only_on_critical_path )
+    if ( is_tracing_ntk || ps_.only_on_critical_path )
     {
       depth_ntk = std::make_shared<depth_view<Ntk, CostFn>>( ntk_ );
     }
@@ -149,7 +155,7 @@ struct balancing_impl
         return;
       }
 
-      if ( ps_.only_on_critical_path && !depth_ntk->is_on_critical_path( n ) )
+      if ( is_tracing_ntk || (ps_.only_on_critical_path && !depth_ntk->is_on_critical_path( n )))
       {
         std::vector<signal<Ntk>> children;
         ntk_.foreach_fanin( n, [&]( auto const& f ) {
@@ -157,7 +163,7 @@ struct balancing_impl
           children.push_back( ntk_.is_complemented( f ) ? dest.create_not( f_best ) : f_best );
         } );
         old_to_new[n] = { dest.clone_node( ntk_, n, children ), depth_ntk->level( n ) };
-        return;
+        if (!is_tracing_ntk) return;
       }
 
       arrival_time_pair<Ntk> best{ {}, std::numeric_limits<uint32_t>::max() };
@@ -171,8 +177,12 @@ struct balancing_impl
 
         std::vector<arrival_time_pair<Ntk>> arrival_times( cut->size() );
         std::transform( cut->begin(), cut->end(), arrival_times.begin(), [&]( auto leaf ) { return old_to_new[ntk_.index_to_node( leaf )]; } );
-
         rebalancing_fn_( dest, cuts.truth_table( *cut ), arrival_times, best.level, best_size, [&]( arrival_time_pair<Ntk> const& cand, uint32_t cand_size ) {
+          if constexpr ( has_node_union_v<Ntk> ) {
+            auto dest_sig = old_to_new[n].f;
+            auto dest_node = dest.get_node(dest_sig);
+            dest.node_union(dest_node, cand.f ^ dest.is_complemented(dest_sig));
+          }
           if ( cand.level < best.level || ( cand.level == best.level && cand_size < best_size ) )
           {
             best = cand;
@@ -188,7 +198,6 @@ struct balancing_impl
       const auto s = old_to_new[f].f;
       dest.create_po( ntk_.is_complemented( f ) ? dest.create_not( s ) : s );
     } );
-
     return cleanup_dangling( dest );
   }
 

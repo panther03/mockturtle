@@ -32,7 +32,7 @@
 
 #pragma once
 
-#include "../networks/xag.hpp"
+#include "../networks/tracing_xag.hpp"
 #include "../utils/index_list.hpp"
 #include "../utils/truth_table_utils.hpp"
 #include "resubstitution.hpp"
@@ -166,7 +166,7 @@ template<class Ntk>
 void xag_resubstitution( Ntk& ntk, resubstitution_params const& ps = {}, resubstitution_stats* pst = nullptr )
 {
   static_assert( is_network_type_v<Ntk>, "Ntk is not a network type" );
-  static_assert( std::is_same_v<typename Ntk::base_type, xag_network>, "Network type is not xag_network" );
+  static_assert( std::is_same_v<typename Ntk::base_type, xag_network> || std::is_same_v<typename Ntk::base_type, tracing_xag_network>, "Network type is not xag_network" );
 
   static_assert( has_clear_values_v<Ntk>, "Ntk does not implement the clear_values method" );
   static_assert( has_fanout_size_v<Ntk>, "Ntk does not implement the fanout_size method" );
