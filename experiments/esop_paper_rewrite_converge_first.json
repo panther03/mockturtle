@@ -1,0 +1,257 @@
+[
+  {
+    "entries": [
+      {
+        "#mc_esop": 90,
+        "#mc_init": 109,
+        "#mc_mc_opt": 74,
+        "#md_esop": 9,
+        "#md_init": 10,
+        "#md_mc_opt": 10,
+        "benchmark": "cardio",
+        "runtime": 3.5199525356292725
+      },
+      {
+        "#mc_esop": 594,
+        "#mc_init": 708,
+        "#mc_mc_opt": 594,
+        "#md_esop": 8,
+        "#md_init": 9,
+        "#md_mc_opt": 8,
+        "benchmark": "dsort",
+        "runtime": 18.0874080657959
+      },
+      {
+        "#mc_esop": 390,
+        "#mc_init": 810,
+        "#mc_mc_opt": 390,
+        "#md_esop": 45,
+        "#md_init": 45,
+        "#md_mc_opt": 45,
+        "benchmark": "msort",
+        "runtime": 5.862546443939209
+      },
+      {
+        "#mc_esop": 390,
+        "#mc_init": 810,
+        "#mc_mc_opt": 390,
+        "#md_esop": 45,
+        "#md_init": 45,
+        "#md_mc_opt": 45,
+        "benchmark": "isort",
+        "runtime": 5.905343055725098
+      },
+      {
+        "#mc_esop": 390,
+        "#mc_init": 810,
+        "#mc_mc_opt": 390,
+        "#md_esop": 45,
+        "#md_init": 45,
+        "#md_mc_opt": 45,
+        "benchmark": "bsort",
+        "runtime": 5.977607250213623
+      },
+      {
+        "#mc_esop": 338,
+        "#mc_init": 702,
+        "#mc_mc_opt": 338,
+        "#md_esop": 25,
+        "#md_init": 25,
+        "#md_mc_opt": 25,
+        "benchmark": "osort",
+        "runtime": 5.018672943115234
+      },
+      {
+        "#mc_esop": 82,
+        "#mc_init": 87,
+        "#mc_mc_opt": 58,
+        "#md_esop": 5,
+        "#md_init": 6,
+        "#md_mc_opt": 10,
+        "benchmark": "hd01",
+        "runtime": 2.0056233406066895
+      },
+      {
+        "#mc_esop": 74,
+        "#mc_init": 76,
+        "#mc_mc_opt": 47,
+        "#md_esop": 6,
+        "#md_init": 6,
+        "#md_mc_opt": 15,
+        "benchmark": "hd02",
+        "runtime": 3.388993263244629
+      },
+      {
+        "#mc_esop": 30,
+        "#mc_init": 27,
+        "#mc_mc_opt": 21,
+        "#md_esop": 5,
+        "#md_init": 5,
+        "#md_mc_opt": 7,
+        "benchmark": "hd03",
+        "runtime": 0.14549483358860016
+      },
+      {
+        "#mc_esop": 56,
+        "#mc_init": 75,
+        "#mc_mc_opt": 41,
+        "#md_esop": 8,
+        "#md_init": 10,
+        "#md_mc_opt": 10,
+        "benchmark": "hd04",
+        "runtime": 2.3360369205474854
+      },
+      {
+        "#mc_esop": 170,
+        "#mc_init": 121,
+        "#mc_mc_opt": 105,
+        "#md_esop": 6,
+        "#md_init": 7,
+        "#md_mc_opt": 7,
+        "benchmark": "hd05",
+        "runtime": 1.2857760190963745
+      },
+      {
+        "#mc_esop": 170,
+        "#mc_init": 121,
+        "#mc_mc_opt": 105,
+        "#md_esop": 6,
+        "#md_init": 7,
+        "#md_mc_opt": 7,
+        "benchmark": "hd06",
+        "runtime": 1.1691091060638428
+      },
+      {
+        "#mc_esop": 11,
+        "#mc_init": 17,
+        "#mc_mc_opt": 11,
+        "#md_esop": 4,
+        "#md_init": 5,
+        "#md_mc_opt": 4,
+        "benchmark": "hd07",
+        "runtime": 0.08261392265558243
+      },
+      {
+        "#mc_esop": 12,
+        "#mc_init": 18,
+        "#mc_mc_opt": 12,
+        "#md_esop": 5,
+        "#md_init": 6,
+        "#md_mc_opt": 5,
+        "benchmark": "hd08",
+        "runtime": 0.5362665057182312
+      },
+      {
+        "#mc_esop": 116,
+        "#mc_init": 134,
+        "#mc_mc_opt": 83,
+        "#md_esop": 10,
+        "#md_init": 14,
+        "#md_mc_opt": 13,
+        "benchmark": "hd09",
+        "runtime": 5.257881164550781
+      },
+      {
+        "#mc_esop": 32,
+        "#mc_init": 35,
+        "#mc_mc_opt": 33,
+        "#md_esop": 5,
+        "#md_init": 6,
+        "#md_mc_opt": 6,
+        "benchmark": "hd10",
+        "runtime": 0.660169780254364
+      },
+      {
+        "#mc_esop": 343,
+        "#mc_init": 391,
+        "#mc_mc_opt": 340,
+        "#md_esop": 14,
+        "#md_init": 18,
+        "#md_mc_opt": 15,
+        "benchmark": "hd11",
+        "runtime": 16.553176879882813
+      },
+      {
+        "#mc_esop": 70,
+        "#mc_init": 116,
+        "#mc_mc_opt": 70,
+        "#md_esop": 14,
+        "#md_init": 16,
+        "#md_mc_opt": 14,
+        "benchmark": "hd12",
+        "runtime": 1.7558143138885498
+      },
+      {
+        "#mc_esop": 1003,
+        "#mc_init": 3141,
+        "#mc_mc_opt": 1003,
+        "#md_esop": 8,
+        "#md_init": 12,
+        "#md_mc_opt": 8,
+        "benchmark": "bar",
+        "runtime": 19.171567916870117
+      },
+      {
+        "#mc_esop": 545,
+        "#mc_init": 655,
+        "#mc_mc_opt": 480,
+        "#md_esop": 11,
+        "#md_init": 16,
+        "#md_mc_opt": 15,
+        "benchmark": "cavlc",
+        "runtime": 52.382240295410156
+      },
+      {
+        "#mc_esop": 79,
+        "#mc_init": 107,
+        "#mc_mc_opt": 58,
+        "#md_esop": 4,
+        "#md_init": 8,
+        "#md_mc_opt": 6,
+        "benchmark": "ctrl",
+        "runtime": 6.556029796600342
+      },
+      {
+        "#mc_esop": 292,
+        "#mc_init": 304,
+        "#mc_mc_opt": 292,
+        "#md_esop": 3,
+        "#md_init": 3,
+        "#md_mc_opt": 3,
+        "benchmark": "dec",
+        "runtime": 24.072824478149414
+      },
+      {
+        "#mc_esop": 935,
+        "#mc_init": 1157,
+        "#mc_mc_opt": 844,
+        "#md_esop": 9,
+        "#md_init": 15,
+        "#md_mc_opt": 14,
+        "benchmark": "i2c",
+        "runtime": 49.44988250732422
+      },
+      {
+        "#mc_esop": 195,
+        "#mc_init": 213,
+        "#mc_mc_opt": 163,
+        "#md_esop": 8,
+        "#md_init": 15,
+        "#md_mc_opt": 15,
+        "benchmark": "int2float",
+        "runtime": 13.12839126586914
+      },
+      {
+        "#mc_esop": 211,
+        "#mc_init": 170,
+        "#mc_mc_opt": 148,
+        "#md_esop": 10,
+        "#md_init": 19,
+        "#md_mc_opt": 17,
+        "benchmark": "router",
+        "runtime": 7.184343338012695
+      }
+    ],
+    "version": "e4c95a8"
+  }
+]
