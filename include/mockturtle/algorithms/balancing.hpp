@@ -165,7 +165,6 @@ struct balancing_impl
         old_to_new[n] = { dest.clone_node( ntk_, n, children ), depth_ntk->level( n ) };
         if (!is_tracing_ntk) return;
       }
-
       arrival_time_pair<Ntk> best{ {}, std::numeric_limits<uint32_t>::max() };
       uint32_t best_size{};
       for ( auto& cut : cuts.cuts( ntk_.node_to_index( n ) ) )
@@ -177,7 +176,9 @@ struct balancing_impl
 
         std::vector<arrival_time_pair<Ntk>> arrival_times( cut->size() );
         std::transform( cut->begin(), cut->end(), arrival_times.begin(), [&]( auto leaf ) { return old_to_new[ntk_.index_to_node( leaf )]; } );
+        bool updated = false;
         rebalancing_fn_( dest, cuts.truth_table( *cut ), arrival_times, best.level, best_size, [&]( arrival_time_pair<Ntk> const& cand, uint32_t cand_size ) {
+          updated = true;
           if constexpr ( has_node_union_v<Ntk> ) {
             auto dest_sig = old_to_new[n].f;
             auto dest_node = dest.get_node(dest_sig);
@@ -192,12 +193,23 @@ struct balancing_impl
       }
       old_to_new[n] = best;
       current_level = std::max( current_level, best.level );
+      if constexpr ( has_node_union_v<Ntk> ) {
+        dest.transfer_trace();
+        /*if (!updated) {
+          //dest.clear_trace();
+        } else {
+          
+        }*/
+      }
     } );
-
     ntk_.foreach_po( [&]( auto const& f ) {
       const auto s = old_to_new[f].f;
       dest.create_po( ntk_.is_complemented( f ) ? dest.create_not( s ) : s );
     } );
+
+    if constexpr (has_node_union_v<Ntk>) {
+      dest.transfer_trace();
+    }
     return cleanup_dangling( dest );
   }
 

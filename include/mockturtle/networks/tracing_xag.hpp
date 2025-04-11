@@ -17,6 +17,23 @@
 #include "xag.hpp"
 namespace mockturtle {
 
+struct trace_item {
+  enum {
+      TR_UNION,
+      TR_XOR,
+      TR_AND,
+      TR_PO,
+      TR_COMMIT,
+      TR_FORGET,
+      TR_CLEAR
+  } type;
+  uint32_t n;
+  xag_network::signal a;
+  xag_network::signal b;
+};
+
+static std::vector<trace_item> _all_trace_buf;
+
 class tracing_xag_network
 {
 public:
@@ -29,20 +46,30 @@ public:
   using node = uint64_t;
   using signal = xag_network::signal;
 
+public:
   tracing_xag_network()
       : _storage( std::make_shared<xag_storage>() ),
         _events( std::make_shared<decltype( _events )::element_type>() )
   {
+    _all_trace_buf.push_back(trace_item {
+      .type = trace_item::TR_CLEAR
+    });
   }
 
   tracing_xag_network( std::shared_ptr<xag_storage> storage )
       : _storage( storage ),
         _events( std::make_shared<decltype( _events )::element_type>() )
   {
+    _all_trace_buf.push_back(trace_item {
+      .type = trace_item::TR_CLEAR
+    });
   }
 
   tracing_xag_network clone() const
   {
+    _all_trace_buf.push_back(trace_item {
+      .type = trace_item::TR_CLEAR
+    });
     return { std::make_shared<xag_storage>( *_storage ) };
   }
 #pragma endregion
@@ -69,6 +96,13 @@ public:
     _storage->nodes[f.index].data[0].h1++;
     auto const po_index = static_cast<uint32_t>( _storage->outputs.size() );
     _storage->outputs.emplace_back( f.index, f.complement );
+    if (_tracing)  {
+      _trace_buf.push_back(trace_item {
+        .type = trace_item::TR_PO,
+        .n = po_index,
+        .a = f
+      });
+    }
     return po_index;
   }
 
@@ -148,24 +182,35 @@ public:
     return { index, 0 };
   }
 
-  signal _create_node( signal a, signal b )
+  signal _create_node( signal a, signal b, bool commit = false )
   {
     auto old_size = _storage->nodes.size();
     signal s = _create_node_int( a, b );
-    if ( _tracing && (_storage->nodes.size() > old_size ))
+    
+    if ( _tracing )
     {
-      assert( _storage->nodes.size() == old_size + 1 );
+      // && (_storage->nodes.size() > old_size )
+      //assert( _storage->nodes.size() == old_size + 1 );
       auto& node = _storage->nodes[s.index];
       signal c1 = node.children[0];
       signal c2 = node.children[1];
-      std::cout << (c1.index > c2.index ? "X" : "A") << " " << s.index << " ";
-      std::cout << ( c1.complement ? 1 : 0 ) << " " << c1.index;
-      std::cout << " " << ( c2.complement ? 1 : 0 ) << " " << c2.index << "\n";
+      if (s.complement) { 
+        // should be a XOR
+        assert(c1.index > c2.index);
+        c1.complement ^= 1;
+      }
+      auto &dest = commit ? _all_trace_buf : _trace_buf;
+      dest.push_back(trace_item {
+        .type = (c1.index > c2.index ? trace_item::TR_XOR : trace_item::TR_AND),
+        .n = node_to_index(s.index),
+        .a = c1,
+        .b = c2
+      });
     }
     return s;
   }
 
-  signal create_and( signal a, signal b )
+  signal create_and( signal a, signal b, bool commit = false )
   {
     /* order inputs a < b it is a AND */
     if ( a.index > b.index )
@@ -180,7 +225,7 @@ public:
     {
       return a.complement == false ? get_constant( false ) : b;
     }
-    return _create_node( a, b );
+    return _create_node( a, b, commit );
   }
 
   signal create_nand( signal const& a, signal const& b )
@@ -208,7 +253,7 @@ public:
     return !create_and( a, !b );
   }
 
-  signal create_xor( signal a, signal b )
+  signal create_xor( signal a, signal b, bool commit = false )
   {
     /* order inputs a > b it is a XOR */
     if ( a.index < b.index )
@@ -228,7 +273,7 @@ public:
       return a ^ f_compl;
     }
 
-    return _create_node( a, b ) ^ f_compl;
+    return _create_node( a, b, commit ) ^ f_compl;
   }
 
   signal create_xnor( signal const& a, signal const& b )
@@ -293,11 +338,11 @@ public:
     assert( children.size() == 2u );
     if ( other.is_and( source ) )
     {
-      return create_and( children[0u], children[1u] );
+      return create_and( children[0u], children[1u], true );
     }
     else
     {
-      return create_xor( children[0u], children[1u] );
+      return create_xor( children[0u], children[1u], true );
     }
   }
 #pragma endregion
@@ -695,13 +740,30 @@ public:
     _tracing = true;
   }
 
-  void node_union( node const& old_node, signal const& new_signal ) const
+  void disable_tracing() {
+    _tracing = false;
+  }
+
+  void clear_trace() {
+    _trace_buf.clear();
+  }
+
+  void transfer_trace() {
+    // transfer all items from _trace_buf to _all_trace_buf
+    _all_trace_buf.insert(_all_trace_buf.end(), _trace_buf.begin(), _trace_buf.end());
+    _trace_buf.clear();
+  }
+
+  void node_union( node const& old_node, signal const& new_signal )
   {
     if (!_tracing || (!new_signal.complement && node_to_index(old_node) == new_signal.index)) {
         return;
     }
-    std::cout << "U " << node_to_index(old_node) << " ";
-    std::cout << (new_signal.complement ? 1 : 0) << " " << new_signal.index << "\n"; 
+    _trace_buf.push_back(trace_item {
+        .type = trace_item::TR_UNION,
+        .n = node_to_index(old_node),
+        .a = new_signal
+    });
   }
 #pragma endregion
 
@@ -1145,11 +1207,59 @@ public:
 #pragma endregion
 
 private:
-  bool _tracing = false;
-
+  bool _tracing = true;
+  std::vector<trace_item> _trace_buf;
 public:
   std::shared_ptr<xag_storage> _storage;
   std::shared_ptr<network_events<base_type>> _events;
+
+public:
+  static void trace_forget() { 
+    _all_trace_buf.push_back(trace_item {
+      .type = trace_item::TR_FORGET
+    });
+  }
+
+  static void trace_commit() {
+    _all_trace_buf.push_back(trace_item {
+      .type = trace_item::TR_COMMIT
+    });
+  }
+
+  static void print_trace() {
+    for (auto &item : _all_trace_buf) {
+      switch (item.type) {
+        case trace_item::TR_AND:
+        case trace_item::TR_XOR: {
+            std::cout << (item.type == trace_item::TR_AND ? "A" : "X") << " " << item.n;
+            std::cout << " " << (item.a.complement ? 1 : 0) << " " << item.a.index;
+            std::cout << " " << (item.b.complement ? 1 : 0) << " " << item.b.index;
+            break;
+        }
+        case trace_item::TR_UNION: {
+            std::cout << "U " << item.n << " " << (item.a.complement ? 1 : 0) << " " << item.a.index;
+            break;
+        }
+        case trace_item::TR_PO: {
+            std::cout << "O " << item.n << " " << (item.a.complement ? 1 : 0) << " " << item.a.index;
+            break;
+        }
+        case trace_item::TR_CLEAR: {
+            std::cout << "CLEAR";
+            break;
+        }
+        case trace_item::TR_FORGET: {
+            std::cout << "FORGET";
+            break;
+        }
+        case trace_item::TR_COMMIT: {
+            std::cout << "COMMIT";
+            break;
+        }
+      }
+      std::cout << "\n";
+    }
+  }
 };
 
 } // namespace mockturtle

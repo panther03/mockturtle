@@ -695,6 +695,9 @@ struct cut_rewriting_impl
     /* initial node map */
     node_map<signal<Ntk>, Ntk> old2new( ntk_ );
     Ntk res;
+    if constexpr (has_node_union_v<Ntk>) {
+      res.enable_tracing();
+    }
     old2new[ntk_.get_constant( false )] = res.get_constant( false );
     if ( ntk_.get_node( ntk_.get_constant( true ) ) != ntk_.get_node( ntk_.get_constant( false ) ) )
     {
@@ -719,14 +722,16 @@ struct cut_rewriting_impl
 
       /* nothing to optimize? */
       int32_t value = mffc_size<Ntk, NodeCostFn>( ntk_, n );
+      std::vector<signal<Ntk>> children( ntk_.fanin_size( n ) );
+      ntk_.foreach_fanin( n, [&]( auto const& f, auto i ) {
+        children[i] = ntk_.is_complemented( f ) ? res.create_not( old2new[f] ) : old2new[f];
+      } );
+
+      old2new[n] = res.clone_node( ntk_, n, children );
+      
       if ( value == 1 )
       {
-        std::vector<signal<Ntk>> children( ntk_.fanin_size( n ) );
-        ntk_.foreach_fanin( n, [&]( auto const& f, auto i ) {
-          children[i] = ntk_.is_complemented( f ) ? res.create_not( old2new[f] ) : old2new[f];
-        } );
-
-        old2new[n] = res.clone_node( ntk_, n, children );
+        return;
       }
       else
       {
@@ -754,20 +759,33 @@ struct cut_rewriting_impl
             recursive_deref<Ntk, NodeCostFn>( res, res.get_node( f_new ) );
             int32_t gain = value - value2;
 
+            bool updated = false;
             if ( ( gain > 0 || ( ps_.allow_zero_gain && gain == 0 ) ) && gain > best_gain )
             {
               if constexpr ( has_level_v<Ntk> )
               {
                 if ( !ps_.preserve_depth || res.level( res.get_node( f_new ) ) <= ntk_.level( n ) )
                 {
+                  updated = true;
                   best_gain = gain;
                   best_signal = f_new;
                 }
               }
               else
               {
+                updated = true;
                 best_gain = gain;
                 best_signal = f_new;
+              }
+            }
+            if constexpr ( has_node_union_v<Ntk> ) {
+              if (updated) {
+                auto dest_sig = old2new[n];
+                auto dest_node = res.get_node(dest_sig);
+                res.node_union(dest_node, f_new ^ res.is_complemented(dest_sig));
+                res.transfer_trace();
+              } else { 
+                //res.clear_trace();
               }
             }
 
@@ -777,17 +795,14 @@ struct cut_rewriting_impl
           rewriting_fn_( res, cuts.truth_table( *cut ), children.begin(), children.end(), on_signal );
         }
 
-        if ( best_gain == -1 )
+        if ( best_gain != -1 )
         {
-          std::vector<signal<Ntk>> children( ntk_.fanin_size( n ) );
-          ntk_.foreach_fanin( n, [&]( auto const& f, auto i ) {
-            children[i] = ntk_.is_complemented( f ) ? res.create_not( old2new[f] ) : old2new[f];
-          } );
-
-          old2new[n] = res.clone_node( ntk_, n, children );
-        }
-        else
-        {
+          if constexpr(has_node_union_v<Ntk>) {
+            auto dest_sig = old2new[n];
+          auto dest_node = res.get_node(dest_sig);
+          res.node_union(dest_node, best_signal ^ res.is_complemented(dest_sig));
+          res.transfer_trace();
+          }
           old2new[n] = best_signal;
         }
       }
@@ -800,6 +815,9 @@ struct cut_rewriting_impl
       res.create_po( ntk_.is_complemented( f ) ? res.create_not( old2new[f] ) : old2new[f] );
     } );
 
+    if constexpr (has_node_union_v<Ntk>) {
+      res.transfer_trace();
+    }
     NtkDest ret = cleanup_dangling<NtkDest>( res );
 
     /* new costs */

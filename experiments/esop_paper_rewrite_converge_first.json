@@ -253,5 +253,20 @@
       }
     ],
     "version": "e4c95a8"
+  },
+  {
+    "entries": [
+      {
+        "#mc_esop": 12,
+        "#mc_init": 18,
+        "#mc_mc_opt": 12,
+        "#md_esop": 5,
+        "#md_init": 6,
+        "#md_mc_opt": 5,
+        "benchmark": "hd08",
+        "runtime": 6.4433913230896
+      }
+    ],
+    "version": "7ce29e3"
   }
 ]
