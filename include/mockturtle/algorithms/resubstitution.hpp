@@ -170,7 +170,7 @@ namespace detail
 
 template<typename Ntk>
 bool substitute_fn( Ntk& ntk, typename Ntk::node const& n, typename Ntk::signal const& g )
-{  
+{ 
   ntk.substitute_node( n, g );
   return true;
 }

@@ -121,7 +121,7 @@ struct balancing_impl
     bool is_tracing_ntk = false;
     if constexpr ( has_node_union_v<Ntk> ) {
       is_tracing_ntk = true;
-      dest.enable_tracing();
+      Ntk::unmute_aliasing();
     }
     node_map<arrival_time_pair<Ntk>, Ntk> old_to_new( ntk_ );
 
@@ -193,14 +193,6 @@ struct balancing_impl
       }
       old_to_new[n] = best;
       current_level = std::max( current_level, best.level );
-      if constexpr ( has_node_union_v<Ntk> ) {
-        dest.transfer_trace();
-        /*if (!updated) {
-          //dest.clear_trace();
-        } else {
-          
-        }*/
-      }
     } );
     ntk_.foreach_po( [&]( auto const& f ) {
       const auto s = old_to_new[f].f;
@@ -208,7 +200,7 @@ struct balancing_impl
     } );
 
     if constexpr (has_node_union_v<Ntk>) {
-      dest.transfer_trace();
+      Ntk::mute_aliasing();
     }
     return cleanup_dangling( dest );
   }

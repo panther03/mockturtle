@@ -1,3 +1,44 @@
+/* mockturtle: C++ logic network library
+ * Copyright (C) 2018-2022  EPFL
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*!
+  \file xag.hpp
+  \brief Xor-And Graph (XAG) logic network implementation
+
+  \author Alessandro Tempia Calvino
+  \author Bruno Schmitt
+  \author Eleonora Testa
+  \author Hanyu Wang
+  \author Heinz Riener
+  \author Jinzheng Tu
+  \author Mathias Soeken
+  \author Max Austin
+  \author Siang-Yun (Sonia) Lee
+  \author Walter Lau Neto
+*/
+
 #pragma once
 
 #include <memory>
@@ -13,32 +54,11 @@
 #include "detail/foreach.hpp"
 #include "events.hpp"
 #include "storage.hpp"
-
 #include "xag.hpp"
+
 namespace mockturtle
 {
 
-struct trace_item
-{
-  enum
-  {
-    TR_UNION,
-    TR_ALIAS,
-    TR_XOR,
-    TR_AND,
-    TR_PO,
-    TR_COMMIT,
-    TR_FORGET,
-    TR_CLEAR
-  } type;
-  uint32_t n;
-  xag_network::signal a;
-  xag_network::signal b;
-};
-
-static std::vector<trace_item> _all_trace_buf;
-static std::vector<trace_item> _temp_trace_buf;
-static bool _mute_aliasing = true;
 
 class tracing_xag_network
 {
@@ -52,30 +72,45 @@ public:
   using node = uint64_t;
   using signal = xag_network::signal;
 
-public:
   tracing_xag_network()
       : _storage( std::make_shared<xag_storage>() ),
         _events( std::make_shared<decltype( _events )::element_type>() )
   {
-    _temp_trace_buf.push_back( trace_item{
-        .type = trace_item::TR_CLEAR } );
   }
 
   tracing_xag_network( std::shared_ptr<xag_storage> storage )
       : _storage( storage ),
         _events( std::make_shared<decltype( _events )::element_type>() )
   {
-    _temp_trace_buf.push_back( trace_item{
-        .type = trace_item::TR_CLEAR } );
   }
 
   tracing_xag_network clone() const
   {
-    _temp_trace_buf.push_back( trace_item{
-        .type = trace_item::TR_CLEAR } );
     return { std::make_shared<xag_storage>( *_storage ) };
   }
 #pragma endregion
+
+static void mute_aliasing() {
+  }
+  static void unmute_aliasing() {
+  }
+
+  static void trace_forget()
+  {
+  }
+
+  static void trace_commit()
+  {
+  }
+
+  static void enable_tracing()
+  {
+  }
+  static void disable_tracing()
+  {
+  }
+
+  static void save_trace( std::ostream& out ){}
 
 #pragma region Primary I / O and constants
   signal get_constant( bool value ) const
@@ -99,13 +134,6 @@ public:
     _storage->nodes[f.index].data[0].h1++;
     auto const po_index = static_cast<uint32_t>( _storage->outputs.size() );
     _storage->outputs.emplace_back( f.index, f.complement );
-    if ( _tracing )
-    {
-      _temp_trace_buf.push_back( trace_item{
-          .type = trace_item::TR_PO,
-          .n = po_index,
-          .a = f } );
-    }
     return po_index;
   }
 
@@ -149,7 +177,7 @@ public:
 #pragma endregion
 
 #pragma region Create binary functions
-  signal _create_node_int( signal a, signal b )
+  signal _create_node( signal a, signal b )
   {
     storage::element_type::node_type node;
     node.children[0] = a;
@@ -186,36 +214,7 @@ public:
     return { index, 0 };
   }
 
-  signal _create_node( signal a, signal b, bool dont_trace = false )
-  {
-    return _create_node_int(a,b);
-    /*
-    auto old_size = _storage->nodes.size();
-    signal s = _create_node_int( a, b );
-
-    if ( _tracing && !dont_trace && (_storage->nodes.size() > old_size ))
-    {
-      // 
-      // assert( _storage->nodes.size() == old_size + 1 );
-      auto& node = _storage->nodes[s.index];
-      signal c1 = node.children[0];
-      signal c2 = node.children[1];
-      if ( s.complement )
-      {
-        // should be a XOR
-        assert( c1.index > c2.index );
-        c1.complement ^= 1;
-      }
-      _temp_trace_buf.push_back( trace_item{
-          .type = ( c1.index > c2.index ? trace_item::TR_XOR : trace_item::TR_AND ),
-          .n = node_to_index( s.index ),
-          .a = c1,
-          .b = c2 } );
-    }
-    return s;*/
-  }
-
-  signal create_and( signal a, signal b, bool dont_trace = false )
+  signal create_and( signal a, signal b )
   {
     /* order inputs a < b it is a AND */
     if ( a.index > b.index )
@@ -230,7 +229,7 @@ public:
     {
       return a.complement == false ? get_constant( false ) : b;
     }
-    return _create_node( a, b, dont_trace );
+    return _create_node( a, b );
   }
 
   signal create_nand( signal const& a, signal const& b )
@@ -258,7 +257,7 @@ public:
     return !create_and( a, !b );
   }
 
-  signal create_xor( signal a, signal b, bool dont_trace = false )
+  signal create_xor( signal a, signal b )
   {
     /* order inputs a > b it is a XOR */
     if ( a.index < b.index )
@@ -278,7 +277,7 @@ public:
       return a ^ f_compl;
     }
 
-    return _create_node( a, b, dont_trace ) ^ f_compl;
+    return _create_node( a, b ) ^ f_compl;
   }
 
   signal create_xnor( signal const& a, signal const& b )
@@ -340,19 +339,15 @@ public:
 #pragma region Create arbitrary functions
   signal clone_node( tracing_xag_network const& other, node const& source, std::vector<signal> const& children )
   {
-    signal aliased;
+    assert( children.size() == 2u );
     if ( other.is_and( source ) )
     {
-      aliased = create_and( children[0u], children[1u], true );
+      return create_and( children[0u], children[1u] );
     }
     else
     {
-      aliased = create_xor( children[0u], children[1u], true );
+      return create_xor( children[0u], children[1u] );
     }
-    //if (!_mute_aliasing) {
-    //  node_alias(source, aliased);
-    //}
-    return aliased;
   }
 #pragma endregion
 
@@ -669,7 +664,6 @@ public:
 
   void substitute_node( node const& old_node, signal const& new_signal )
   {
-    node_union( old_node, new_signal );
     std::unordered_map<node, signal> old_to_new;
     std::stack<std::pair<node, signal>> to_substitute;
     to_substitute.push( { old_node, new_signal } );
@@ -721,7 +715,6 @@ public:
 
   void substitute_node_no_restrash( node const& old_node, signal const& new_signal )
   {
-    node_union( old_node, new_signal );
     if ( is_dead( get_node( new_signal ) ) )
     {
       revive_node( get_node( new_signal ) );
@@ -743,40 +736,6 @@ public:
     {
       take_out_node( old_node );
     }
-  }
-
-  void enable_tracing()
-  {
-    _tracing = false;
-  }
-
-  void disable_tracing()
-  {
-    _tracing = false;
-  }
-
-  // void clear_trace() {
-  //   _trace_buf.clear();
-  // }
-
-  void node_union( node const& old_node, signal const& new_signal )
-  {
-    if ( !_tracing || ( !new_signal.complement && node_to_index( old_node ) == new_signal.index ) )
-    {
-      return;
-    }
-    _temp_trace_buf.push_back( trace_item{
-        .type = trace_item::TR_UNION,
-        .n = node_to_index( old_node ),
-        .a = new_signal } );
-  }
-
-  void node_alias( node const& old_node, signal const& new_signal )
-  {
-    _temp_trace_buf.push_back( trace_item{
-        .type = trace_item::TR_ALIAS,
-        .n = node_to_index( old_node ),
-        .a = new_signal } );
   }
 #pragma endregion
 
@@ -1219,82 +1178,9 @@ public:
   }
 #pragma endregion
 
-private:
-  bool _tracing = false;
-
 public:
   std::shared_ptr<xag_storage> _storage;
   std::shared_ptr<network_events<base_type>> _events;
-
-public:
-  static void mute_aliasing() {
-    _mute_aliasing = false;
-  }
-  static void unmute_aliasing() {
-    _mute_aliasing = false;
-  }
-
-  static void trace_forget()
-  {
-    _temp_trace_buf.clear();
-  }
-
-  static void trace_commit()
-  {
-    _all_trace_buf.insert( _all_trace_buf.end(), _temp_trace_buf.begin(), _temp_trace_buf.end() );
-    _all_trace_buf.push_back( trace_item{
-        .type = trace_item::TR_COMMIT } );
-    _temp_trace_buf.clear();
-  }
-
-  static void save_trace( std::ostream& out )
-  {
-    for ( auto& item : _all_trace_buf )
-    {
-      switch ( item.type )
-      {
-      case trace_item::TR_AND:
-      case trace_item::TR_XOR:
-      {
-        out << ( item.type == trace_item::TR_AND ? "A" : "X" ) << " " << item.n;
-        out << " " << ( item.a.complement ? 1 : 0 ) << " " << item.a.index;
-        out << " " << ( item.b.complement ? 1 : 0 ) << " " << item.b.index;
-        break;
-      }
-      case trace_item::TR_UNION:
-      {
-        out << "U " << item.n << " " << ( item.a.complement ? 1 : 0 ) << " " << item.a.index;
-        break;
-      }
-      case trace_item::TR_ALIAS:
-      {
-        out << "L " << item.n << " " << ( item.a.complement ? 1 : 0) << " " << item.a.index;
-        break;
-      }
-      case trace_item::TR_PO:
-      {
-        out << "O " << item.n << " " << ( item.a.complement ? 1 : 0 ) << " " << item.a.index;
-        break;
-      }
-      case trace_item::TR_CLEAR:
-      {
-        out << "CLEAR";
-        break;
-      }
-      case trace_item::TR_FORGET:
-      {
-        out << "FORGET";
-        break;
-      }
-      case trace_item::TR_COMMIT:
-      {
-        out << "COMMIT";
-        break;
-      }
-      }
-      out << "\n";
-    }
-  }
 };
 
 } // namespace mockturtle

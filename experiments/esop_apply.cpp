@@ -159,7 +159,7 @@ void parse_seqn(const char *seqn_path, ParsedSeqn &ps) {
         assert(sig_name_lookup.find(po) != sig_name_lookup.end());
         ps.ntk.create_po(signals[sig_name_lookup[po]]);
     }
-    ps.ntk.transfer_trace();
+    //ps.ntk.transfer_trace();
 }
 
 std::string print_fanin(ParsedSeqn &ps, const xag_ntk::signal &fi) {
@@ -286,7 +286,7 @@ void opt_benchmark(std::string &in_path, std::string &out_path, const int limit)
         
             uint32_t const size_before = fanout_xag.num_gates();
             xag_resubstitution( fanout_xag, rs_ps, &rs_st );
-            fanout_xag.transfer_trace();
+            //fanout_xag.transfer_trace();
             xag_md_opt = cleanup_dangling( xag_md_opt );
         } else {
             xag_md_opt = mockturtle::balancing<xag_ntk, details::num_and<xag_ntk>>( xag_md_opt, mockturtle::esop_rebalancing<xag_ntk>{}, balance_ps );

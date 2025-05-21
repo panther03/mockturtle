@@ -21,8 +21,8 @@
 #include <experiments.hpp>
 
 #define IS_TRACING 1
-#define REWRITE_CONVERGE_FIRST 1
-#define MD_BEFORE_MC 0
+#define REWRITE_CONVERGE_FIRST 0
+#define MD_BEFORE_MC 1
 
 #if IS_TRACING
 #define xag_ntk mockturtle::tracing_xag_network
@@ -231,9 +231,9 @@ void parse_seqn( const char* seqn_path, ParsedSeqn& ps )
     ps.ntk.create_po( signals[sig_name_lookup[po]] );
   }
 
-#if IS_TRACING
-  ps.ntk.transfer_trace();
-#endif
+  // #if IS_TRACING
+  //   ps.ntk.transfer_trace();
+  // #endif
 }
 
 std::string print_fanin( ParsedSeqn& ps, const xag_ntk::signal& fi )
@@ -315,11 +315,20 @@ void write_eqn( const char* eqn_path, ParsedSeqn& ps )
 
 using namespace mockturtle;
 
+void print_ntk_stats (const xag_ntk& ntk) {
+  auto mc_temp = costs<xag_ntk, mc_count>( ntk );
+  {
+    depth_view<xag_ntk, mc_count, false> ntk_md{ ntk };
+    auto md_temp = ntk_md.depth();
+    std::cerr << "[MC,MD] " << mc_temp << "," << md_temp << "\n";
+  }
+}
+
 std::pair<uint32_t, uint32_t> mc_opt( xag_ntk& ntk, uint32_t mc_init )
 {
-  uint32_t mc_mc_opt{0u};
-  uint32_t md_mc_opt{0u};
-  uint32_t mc_tmp{0u};
+  uint32_t mc_mc_opt{ 0u };
+  uint32_t md_mc_opt{ 0u };
+  uint32_t mc_tmp{ 0u };
 
   resubstitution_params ps_resub;
   ps_resub.max_divisors = 100u;
@@ -351,92 +360,100 @@ std::pair<uint32_t, uint32_t> mc_opt( xag_ntk& ntk, uint32_t mc_init )
 
   uint32_t num_ite = 0u;
 #if REWRITE_CONVERGE_FIRST
-    while ( mc_tmp > mc_mc_opt )
+  while ( mc_tmp > mc_mc_opt )
+  {
+    if ( num_ite > 0u )
     {
-      if ( num_ite > 0u )
-      {
-        mc_tmp = mc_mc_opt;
-      }
-
-      ++num_ite;
-      /* Rewriting in DATE20 */
-      xag_ntk ntk_tmp = cut_rewriting<xag_ntk, xag_minmc_resynthesis, mc_count>( ntk, xag_mc_resyn, ps_rewrite, nullptr );
-
-      mc_mc_opt = costs<xag_ntk, mc_count>( ntk_tmp );
-      depth_view<xag_ntk, mc_count, false> ntk_md{ ntk_tmp };
-      md_mc_opt = ntk_md.depth();
-
-      if ( mc_mc_opt < mc_tmp )
-      {
-        tracing_xag_network::trace_commit();
-        ntk = ntk_tmp;
-      }
-      else
-      {
-        tracing_xag_network::trace_commit();
-      }
+      mc_tmp = mc_mc_opt;
     }
+
+    ++num_ite;
+    /* Rewriting in DATE20 */
+//    std::cerr << "Doing CUT REWRITING ON : "; 
+//    print_ntk_stats(ntk);
+    xag_ntk ntk_tmp = cut_rewriting<xag_ntk, xag_minmc_resynthesis, mc_count>( ntk, xag_mc_resyn, ps_rewrite, nullptr );
+//    std::cerr << "After CUT REWRITING : "; 
+//    print_ntk_stats(ntk_tmp);
+
+    mc_mc_opt = costs<xag_ntk, mc_count>( ntk_tmp );
+    depth_view<xag_ntk, mc_count, false> ntk_md{ ntk_tmp };
+    md_mc_opt = ntk_md.depth();
+
+    if ( mc_mc_opt < mc_tmp )
+    {
+      tracing_xag_network::trace_commit();
+      ntk = ntk_tmp;
+    }
+    else
+    {
+      tracing_xag_network::trace_forget();
+    }
+  }
 #endif
 
   num_ite = 0u;
   mc_mc_opt = 0u;
+  while ( mc_tmp > mc_mc_opt )
   {
-    while ( mc_tmp > mc_mc_opt )
+    if ( num_ite > 0u )
     {
-      if ( num_ite > 0u )
-      {
-        mc_tmp = mc_mc_opt;
-      }
+      mc_tmp = mc_mc_opt;
+    }
 
-      ++num_ite;
-      /* Rewriting in DATE20 */
-      //xag_ntk ntk_tmp = cut_rewriting<xag_ntk, xag_minmc_resynthesis, mc_count>( ntk, xag_mc_resyn, ps_rewrite, nullptr );
-      //ntk_tmp = cleanup_dangling( ntk_tmp );
-      xag_ntk ntk_tmp = ntk;
-      // /* Refactoring in DATE20 */
-      // refactoring( ntk_tmp, xag_bidec_resyn, ps_refactor, nullptr, free_xor_cost() );
-      // ntk_tmp = cleanup_dangling( ntk_tmp );
+    ++num_ite;
+    /* Rewriting in DATE20 */
+//    std::cerr << "Doing CUT REWRITING ON : "; 
+//    print_ntk_stats(ntk);
+    xag_ntk ntk_tmp = cut_rewriting<xag_ntk, xag_minmc_resynthesis, mc_count>( ntk, xag_mc_resyn, ps_rewrite, nullptr );
+//    std::cerr << "After CUT REWRITING : "; 
+//    print_ntk_stats(ntk_tmp);
+    // xag_ntk ntk_tmp = ntk;
 
-      /* Resubstitution in DATE20 */
-      fanout_view<xag_ntk> ntk_fo{ ntk_tmp };
-      depth_view<fanout_view<xag_ntk>> ntk_resub{ ntk_fo };
-      resubstitution_minmc_withDC( ntk_resub, ps_resub );
-#if IS_TRACING
-      ntk_resub.transfer_trace();
-#endif
+    // /* Refactoring in DATE20 */
+    // refactoring( ntk_tmp, xag_bidec_resyn, ps_refactor, nullptr, free_xor_cost() );
+    // ntk_tmp = cleanup_dangling( ntk_tmp );
 
-      ntk_tmp = cleanup_dangling( ntk_tmp );
+    /* Resubstitution in DATE20 */
+    fanout_view<xag_ntk> ntk_fo{ ntk_tmp };
+    depth_view<fanout_view<xag_ntk>> ntk_resub{ ntk_fo };
+    resubstitution_minmc_withDC( ntk_resub, ps_resub );
+    // #if IS_TRACING
+    //       ntk_resub.transfer_trace();
+    // #endif
 
-      mc_mc_opt = costs<xag_ntk, mc_count>( ntk_tmp );
-      depth_view<xag_ntk, mc_count, false> ntk_md{ ntk_tmp };
-      md_mc_opt = ntk_md.depth();
+    ntk_tmp = cleanup_dangling( ntk_tmp );
+//    std::cerr << "After RESUBSTITUTION : "; 
+//    print_ntk_stats(ntk_tmp);
 
-      if ( mc_mc_opt < mc_tmp )
-      {
-        tracing_xag_network::trace_commit();
-        ntk = ntk_tmp;
-      }
-      else
-      {
-        tracing_xag_network::trace_commit();
-      }
+    mc_mc_opt = costs<xag_ntk, mc_count>( ntk_tmp );
+    depth_view<xag_ntk, mc_count, false> ntk_md{ ntk_tmp };
+    md_mc_opt = ntk_md.depth();
+
+    if ( mc_mc_opt < mc_tmp )
+    {
+      tracing_xag_network::trace_commit();
+      ntk = ntk_tmp;
+    }
+    else
+    {
+      tracing_xag_network::trace_forget();
     }
   }
-
-  return std::make_pair(md_mc_opt, mc_mc_opt);
+  return std::make_pair( md_mc_opt, mc_mc_opt );
 }
 
-  std::pair<uint32_t, uint32_t> md_opt( xag_ntk& ntk, uint32_t md_init, uint32_t mc_init) {
+std::pair<uint32_t, uint32_t> md_opt( xag_ntk& ntk, uint32_t md_init, uint32_t mc_init )
+{
   mockturtle::balancing_params balance_ps;
   balance_ps.cut_enumeration_ps.cut_size = 6;
   balance_ps.cut_enumeration_ps.cut_limit = 12;
   balance_ps.only_on_critical_path = true;
   balance_ps.progress = false;
 
-  uint32_t md_esop{0u};
-  uint32_t mc_esop{0u};
-  uint32_t md_tmp{0u};
-  uint32_t mc_tmp{mc_init};
+  uint32_t md_esop{ 0u };
+  uint32_t mc_esop{ 0u };
+  uint32_t md_tmp{ 0u };
+  uint32_t mc_tmp{ mc_init };
 
   uint32_t num_ite = 0u;
   md_tmp = md_init;
@@ -449,7 +466,11 @@ std::pair<uint32_t, uint32_t> mc_opt( xag_ntk& ntk, uint32_t mc_init )
       }
 
       ++num_ite;
+//      std::cerr << "Doing BALANCING on : "; 
+//    print_ntk_stats(ntk);
       xag_ntk ntk_tmp = mockturtle::balancing<xag_ntk, mc_count>( ntk, mockturtle::esop_rebalancing<xag_ntk>{}, balance_ps );
+//      std::cerr << "After BALANCING : "; 
+//    print_ntk_stats(ntk_tmp);
       depth_view<xag_ntk, mc_count, false> ntk_md{ ntk_tmp };
       md_esop = ntk_md.depth();
       mc_esop = costs<xag_ntk, mc_count>( ntk_tmp );
@@ -469,14 +490,19 @@ std::pair<uint32_t, uint32_t> mc_opt( xag_ntk& ntk, uint32_t mc_init )
   mc_esop = costs<xag_ntk, mc_count>( ntk );
   depth_view<xag_ntk, mc_count, false> ntk_md{ ntk };
   md_esop = ntk_md.depth();
-  return std::make_pair(md_esop, mc_esop);
+  return std::make_pair( md_esop, mc_esop );
+}
+
+inline uint32_t he_cost( uint32_t md, uint32_t mc )
+{
+  return md * md * mc;
 }
 
 int main( int argc, char** argv )
 {
   using namespace experiments;
 
-  if ( argc != 3 )
+  if ( argc < 3 )
   {
     std::cerr << "[e] expected path to input seqn & output rules\n";
     exit( EXIT_FAILURE );
@@ -485,18 +511,16 @@ int main( int argc, char** argv )
   const char* eqn_path = argv[2];
 
   ParsedSeqn seqn;
+  parse_seqn( seqn_path, seqn );
 #if IS_TRACING
   seqn.ntk.disable_tracing();
 #endif
-  parse_seqn( seqn_path, seqn );
   auto& ntk = seqn.ntk;
 
   uint32_t mc_init{};
   uint32_t md_init{};
-  uint32_t mc_middle{};
-  uint32_t md_middle{};
-  uint32_t mc_final{};
-  uint32_t md_final{};
+  uint32_t mc_final{ 0u };
+  uint32_t md_final{ 0u };
 
   mc_init = costs<xag_ntk, mc_count>( ntk );
   {
@@ -504,33 +528,77 @@ int main( int argc, char** argv )
     md_init = ntk_md.depth();
   }
 
-  const auto begin_time = std::chrono::high_resolution_clock::now();
+  std::vector<uint32_t> md_path{ md_init };
+  std::vector<uint32_t> mc_path{ mc_init };
+  uint32_t num_ite{ 0u };
+  uint32_t max_ite{ 4u };
+
+ // xag_ntk ntk_iter;
+ // do
+ // {
+ //   if ( num_ite > 0 )
+ //   {
+ //     md_init = md_final;
+ //     mc_init = mc_final;
+ //     ntk = ntk_iter;
+ //   }
+ //   ntk_iter = ntk;
+ //   num_ite++;
+
 #if MD_BEFORE_MC
-  auto [md_esop, mc_esop] = md_opt(ntk, md_init, mc_init);
-  md_middle = md_esop;
-  mc_middle = mc_esop;
-  auto [md_mc_opt, mc_mc_opt] = mc_opt(ntk, mc_init);
-  md_final = md_mc_opt;
-  mc_final = mc_mc_opt;
-#else 
-  auto [md_mc_opt, mc_mc_opt] = mc_opt(ntk, mc_init);
-  md_middle = md_mc_opt;
-  mc_middle = mc_mc_opt;
-  auto [md_esop, mc_esop] = md_opt(ntk, md_mc_opt, mc_mc_opt);
-  md_final = md_esop;
-  mc_final = mc_esop;
+    auto [md_esop, mc_esop] = md_opt( ntk, md_init, mc_init );
+    md_path.push_back( md_esop );
+    mc_path.push_back( mc_esop );
+    std::tie(md_esop, mc_esop) = md_opt( ntk, md_esop, mc_esop );
+    md_path.push_back( md_esop );
+    mc_path.push_back( mc_esop );
+    //auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk, mc_esop );
+    //md_path.push_back( md_mc_opt );
+    //mc_path.push_back( mc_mc_opt );
+    md_final = md_esop;
+    mc_final = mc_esop;
+#else
+    auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk, mc_init );
+    md_path.push_back( md_mc_opt );
+    mc_path.push_back( mc_mc_opt );
+    auto [md_esop, mc_esop] = md_opt( ntk, md_mc_opt, mc_mc_opt );
+    md_path.push_back( md_esop );
+    mc_path.push_back( mc_esop );
+//    print_ntk_stats(ntk_iter);
+//    print_ntk_stats(ntk_iter);
+    // md_final = md_esop;
+    // mc_final = mc_esop;
 #endif
+    //fmt::print( "[{}] [i={}] ({},{}) [{}] -> ({},{}) [{}]\n", seqn_path, num_ite, md_init, mc_init, he_cost( md_init, mc_init ), md_final, mc_final, he_cost( md_final, mc_final ) );
+    // he_cost(md_final, mc_final) < he_cost(md_init, mc_init)
+ // } while ( num_ite < max_ite );
 
+  std::stringstream status;
+  status << "COM [i] (MD,MC) : ";
+  for ( int i = 0; i < md_path.size(); i++ )
+  {
+    if ( i != 0 )
+    {
+      status << " -> ";
+    }
+    status << "(" << md_path[i] << "," << mc_path[i] << ")";
+  }
+  std::cout << status.str();
 #if IS_TRACING
-  tracing_xag_network::print_trace();
+  if ( argc == 4 )
+  {
+    const char* trace_path = argv[3];
+    std::ofstream out( trace_path );
+    tracing_xag_network::save_trace( out );
+    out << status.str();
+    out.close();
+  }
+  else
+  {
+    tracing_xag_network::save_trace( std::cout );
+    std::cout << status.str();
+  }
 #endif
-
-#if 1
-  fmt::print( "COM [i] MC : {} -> {} -> {}; MD : {} -> {} -> {}\n", mc_init, mc_middle, mc_final, md_init, md_middle, md_final );
-#endif
-
-  std::chrono::duration<float> duration = std::chrono::high_resolution_clock::now() - begin_time;
-  float runtime = duration.count();
 
   write_eqn( eqn_path, seqn );
 

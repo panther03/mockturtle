@@ -696,7 +696,7 @@ struct cut_rewriting_impl
     node_map<signal<Ntk>, Ntk> old2new( ntk_ );
     Ntk res;
     if constexpr (has_node_union_v<Ntk>) {
-      res.enable_tracing();
+      Ntk::unmute_aliasing();
     }
     old2new[ntk_.get_constant( false )] = res.get_constant( false );
     if ( ntk_.get_node( ntk_.get_constant( true ) ) != ntk_.get_node( ntk_.get_constant( false ) ) )
@@ -778,16 +778,14 @@ struct cut_rewriting_impl
                 best_signal = f_new;
               }
             }
-            if constexpr ( has_node_union_v<Ntk> ) {
-              if (updated) {
-                auto dest_sig = old2new[n];
-                auto dest_node = res.get_node(dest_sig);
-                res.node_union(dest_node, f_new ^ res.is_complemented(dest_sig));
-                res.transfer_trace();
-              } else { 
-                //res.clear_trace();
-              }
-            }
+            
+              //if (updated) {
+              //  
+              //}
+                //res.transfer_trace();
+              /* else { 
+                res.clear_trace();
+              }*/
 
             return true;
           };
@@ -797,11 +795,10 @@ struct cut_rewriting_impl
 
         if ( best_gain != -1 )
         {
-          if constexpr(has_node_union_v<Ntk>) {
+          if constexpr ( has_node_union_v<Ntk> ) {
             auto dest_sig = old2new[n];
-          auto dest_node = res.get_node(dest_sig);
-          res.node_union(dest_node, best_signal ^ res.is_complemented(dest_sig));
-          res.transfer_trace();
+            auto dest_node = res.get_node(dest_sig);
+            res.node_union(dest_node, best_signal ^ res.is_complemented(dest_sig));
           }
           old2new[n] = best_signal;
         }
@@ -816,7 +813,7 @@ struct cut_rewriting_impl
     } );
 
     if constexpr (has_node_union_v<Ntk>) {
-      res.transfer_trace();
+      Ntk::mute_aliasing();
     }
     NtkDest ret = cleanup_dangling<NtkDest>( res );
 

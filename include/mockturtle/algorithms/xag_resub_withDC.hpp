@@ -970,8 +970,14 @@ void resubstitution_minmc_withDC( Ntk& ntk, resubstitution_params const& ps = {}
   typename resub_impl_t::engine_st_t engine_st;
   typename resub_impl_t::collector_st_t collector_st;
 
+  if constexpr (has_node_union_v<Ntk>) {
+    Ntk::unmute_aliasing();
+  }
   resub_impl_t p( resub_view, ps, st, engine_st, collector_st );
   p.run();
+  if constexpr (has_node_union_v<Ntk>) {
+    Ntk::mute_aliasing();
+  }
 
   if ( ps.verbose )
   {
