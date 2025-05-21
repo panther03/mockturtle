@@ -51,7 +51,7 @@
 #include <kitty/print.hpp>
 #include <kitty/spectral.hpp>
 
-#include "../../networks/xag.hpp"
+#include "../../networks/tracing_xag.hpp"
 #include "../../traits.hpp"
 #include "../../utils/stopwatch.hpp"
 #include "../../views/cut_view.hpp"
@@ -174,9 +174,10 @@ public:
     }
   }
 
-  template<typename LeavesIterator, typename Fn>
-  void operator()( xag_network& xag, kitty::dynamic_truth_table function, kitty::dynamic_truth_table const& dont_cares, LeavesIterator begin, LeavesIterator end, Fn&& fn )
+  template<typename LeavesIterator, typename Fn, typename Ntk>
+  void operator()( Ntk& xag, kitty::dynamic_truth_table function, kitty::dynamic_truth_table const& dont_cares, LeavesIterator begin, LeavesIterator end, Fn&& fn )
   {
+    static_assert( std::is_same_v<typename Ntk::base_type, xag_network> || std::is_same_v<typename Ntk::base_type, tracing_xag_network>, "Network type is not xag_network" );
     if ( !kitty::is_const0( dont_cares ) )
     {
       const auto cnt = kitty::count_ones( dont_cares );
@@ -222,9 +223,10 @@ public:
     }
   }
 
-  template<typename LeavesIterator, typename Fn>
-  void operator()( xag_network& xag, kitty::dynamic_truth_table const& function, LeavesIterator begin, LeavesIterator end, Fn&& fn ) const
+  template<typename LeavesIterator, typename Fn, class Ntk = xag_network>
+  void operator()( Ntk& xag, kitty::dynamic_truth_table const& function, LeavesIterator begin, LeavesIterator end, Fn&& fn ) const
   {
+    static_assert( std::is_same_v<typename Ntk::base_type, xag_network> || std::is_same_v<typename Ntk::base_type, tracing_xag_network>, "Network type is not xag_network" );
     // stopwatch t1( st.time_total );
 
     const auto func_ext = kitty::extend_to<6u>( function );
@@ -375,6 +377,10 @@ private:
     std::generate( db_pis->begin(), db_pis->end(), [&]() { return db->create_pi(); } );
 
     std::ifstream file1( filename.c_str(), std::ifstream::in );
+    if (!file1) {
+      std::cerr << "[e] could not open database " << filename.c_str() << "\n";
+      exit(EXIT_FAILURE);
+    }
     std::string line;
     unsigned pos{ 0u };
 

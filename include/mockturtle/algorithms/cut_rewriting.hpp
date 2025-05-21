@@ -717,6 +717,11 @@ struct cut_rewriting_impl
     ntk_.foreach_gate( [&]( auto const& n, auto i ) {
       pbar( i, i );
 
+      int nc = -1;
+      if constexpr (has_node_union_v<Ntk>) {
+        nc = (*ntk_._canon_map)[n];
+      }
+
       /* nothing to optimize? */
       int32_t value = mffc_size<Ntk, NodeCostFn>( ntk_, n );
       if ( value == 1 )
@@ -788,6 +793,10 @@ struct cut_rewriting_impl
         }
         else
         {
+          if constexpr (has_node_union_v<Ntk>) {
+            assert(nc > 0);
+            res.node_union(nc, res.get_node(best_signal));
+          }
           old2new[n] = best_signal;
         }
       }

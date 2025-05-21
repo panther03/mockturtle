@@ -149,6 +149,11 @@ struct balancing_impl
         return;
       }
 
+      int nc = -1;
+      if constexpr (has_node_union_v<Ntk>) {
+        nc = (*ntk_._canon_map)[n];
+      }
+
       if ( ps_.only_on_critical_path && !depth_ntk->is_on_critical_path( n ) )
       {
         std::vector<signal<Ntk>> children;
@@ -177,6 +182,13 @@ struct balancing_impl
           {
             best = cand;
             best_size = cand_size;
+          }
+
+          if constexpr (has_node_union_v<Ntk>) {
+            if (cand.level < depth_ntk->level(n)) {
+              assert(nc > 0);
+              dest.node_union(nc, dest.get_node(best.f));
+            }
           }
         } );
       }

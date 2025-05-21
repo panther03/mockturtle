@@ -153,6 +153,21 @@ template<class Ntk>
 inline constexpr bool is_topologically_sorted_v = is_topologically_sorted<Ntk>::value;
 #pragma endregion
 
+#pragma region has_node_union
+template<class Ntk, class = void>
+struct has_node_union : std::false_type
+{
+};
+
+template<class Ntk>
+struct has_node_union<Ntk, std::void_t<decltype( std::declval<Ntk>().node_union( std::declval<int>(), std::declval<node<Ntk> const&>()) )>> : std::true_type
+{
+};
+
+template<class Ntk>
+inline constexpr bool has_node_union_v = has_node_union<Ntk>::value;
+#pragma endregion
+
 #pragma region has_get_constant
 template<class Ntk, class = void>
 struct has_get_constant : std::false_type
