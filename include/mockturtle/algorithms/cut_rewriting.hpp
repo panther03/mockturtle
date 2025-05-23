@@ -717,7 +717,7 @@ struct cut_rewriting_impl
     ntk_.foreach_gate( [&]( auto const& n, auto i ) {
       pbar( i, i );
 
-      int nc = -1;
+      uint32_t nc = 0xFFFFFFFF;
       if constexpr (has_node_union_v<Ntk>) {
         nc = (*ntk_._canon_map)[n];
       }
@@ -793,11 +793,11 @@ struct cut_rewriting_impl
         }
         else
         {
-          if constexpr (has_node_union_v<Ntk>) {
-            assert(nc > 0);
-            res.node_union(nc, res.get_node(best_signal));
-          }
           old2new[n] = best_signal;
+          if constexpr (has_node_union_v<Ntk>) {
+            assert(nc != 0xFFFFFFFF);
+            res.node_union(nc, best_signal);
+          }
         }
       }
 

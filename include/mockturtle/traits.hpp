@@ -160,7 +160,7 @@ struct has_node_union : std::false_type
 };
 
 template<class Ntk>
-struct has_node_union<Ntk, std::void_t<decltype( std::declval<Ntk>().node_union( std::declval<int>(), std::declval<node<Ntk> const&>()) )>> : std::true_type
+struct has_node_union<Ntk, std::void_t<decltype( std::declval<Ntk>().node_union( std::declval<uint32_t>(), std::declval<signal<Ntk> const&>()) )>> : std::true_type
 {
 };
 

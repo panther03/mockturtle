@@ -55,19 +55,28 @@
 #include "events.hpp"
 #include "storage.hpp"
 #include "xag.hpp"
+extern std::ostream* log_out;
 
 namespace mockturtle
 {
 
-static unsigned int canon_cnt = 1;
+static uint32_t canon_cnt = 1;
 
-int fresh_canonical() {
+
+uint32_t fresh_canonical() {
   return canon_cnt++;
 }
 
 class tracing_xag_network
 {
-
+private:
+  union canon_node {
+    struct {
+      uint32_t idx : 31;
+      uint32_t complement : 1;
+    };
+    uint32_t node;
+  };
 public:
 #pragma region Types and constructors
   static constexpr auto min_fanin_size = 2u;
@@ -80,13 +89,13 @@ public:
 
   tracing_xag_network()
       : _storage( std::make_shared<xag_storage>() ),
-        _canon_map( std::make_shared<std::vector<int>>()),
+        _canon_map( std::make_shared<std::vector<uint32_t>>()),
         _events( std::make_shared<decltype( _events )::element_type>() )
   {
     _canon_map->push_back(0);
   }
 
-  tracing_xag_network( std::shared_ptr<xag_storage> storage, std::shared_ptr<std::vector<int>> canon_map )
+  tracing_xag_network( std::shared_ptr<xag_storage> storage, std::shared_ptr<std::vector<uint32_t>> canon_map )
       : _storage( storage ),
         _canon_map(canon_map),
         _events( std::make_shared<decltype( _events )::element_type>() )
@@ -95,9 +104,15 @@ public:
 
   tracing_xag_network clone() const
   {
-    return { std::make_shared<xag_storage>( *_storage ), std::make_shared<std::vector<int>>( *_canon_map ) };
+    return { std::make_shared<xag_storage>( *_storage ), std::make_shared<std::vector<uint32_t>>( *_canon_map ) };
   }
 #pragma endregion
+
+void get_canon(signal const& s) {
+  canon_node c;
+  c.node = (*_canon_map)[s.index];
+  (*log_out) << ((s.complement ^ c.complement) ? "1 " : "0 ") << c.idx;
+}
 
 #pragma region Primary I / O and constants
   signal get_constant( bool value ) const
@@ -109,7 +124,7 @@ public:
   {
     const auto index = _storage->nodes.size();
     auto& node = _storage->nodes.emplace_back();
-    _canon_map->emplace_back(index);
+    _canon_map->push_back(index);
     fresh_canonical();
     node.children[0].data = node.children[1].data = _storage->inputs.size();
     node.data[1].h2 = 1; // mark as PI
@@ -123,6 +138,9 @@ public:
     _storage->nodes[f.index].data[0].h1++;
     auto const po_index = static_cast<uint32_t>( _storage->outputs.size() );
     _storage->outputs.emplace_back( f.index, f.complement );
+    (*log_out) << "O " << po_index << " ";
+    get_canon(f);
+    (*log_out) << "\n";
     return po_index;
   }
 
@@ -188,7 +206,7 @@ public:
     }
     assert ( _canon_map->size() == _storage->nodes.size());
     _storage->nodes.push_back( node );
-    _canon_map->push_back(-1);
+    _canon_map->push_back(0xFFFFFFFF);
 
     _storage->hash[node] = index;
 
@@ -202,11 +220,13 @@ public:
     }
 
     if (!aliased) {
-      assert ((*_canon_map)[index] == -1);
-      int dst = fresh_canonical();
-      //std::cout << ((a.index > b.index) ? "X" : "A") << " " << dst;
-      //std::cout << " " << ( a.complement ? 1 : 0 ) << " " << a.index;
-      //std::cout << " " << ( b.complement ? 1 : 0 ) << " " << b.index << "\n";
+      assert ((*_canon_map)[index] == 0xFFFFFFFF);
+      uint32_t dst = fresh_canonical();
+      (*log_out) << ((a.index > b.index) ? "X" : "A") << " " << dst << " ";
+      get_canon(a);
+      (*log_out) << " ";
+      get_canon(b);
+      (*log_out) << "\n";
       (*_canon_map)[index] = dst;
     }
 
@@ -348,8 +368,11 @@ public:
     {
       s = create_xor( children[0u], children[1u], true );
     }
-    assert((*other._canon_map)[source] > 0);
-    (*_canon_map)[s.index] = (*other._canon_map)[source];
+    canon_node c;
+    c.node = (*other._canon_map)[source];
+    c.complement ^= s.complement ? 1 : 0;
+    assert(c.node != 0xFFFFFFFF);
+    (*_canon_map)[s.index] = c.node;
     return s;
   }
 #pragma endregion
@@ -1182,13 +1205,25 @@ public:
 #pragma endregion
 
 #pragma region Tracing specific
-  void node_union( int n1_canon, const node &n2) {
-    std::cout << "U " << n1_canon << " " << (*_canon_map)[n2] << "\n";
+
+  void node_union( uint32_t n1_canon, signal const& s2) {
+    canon_node n1c;
+    n1c.node = n1_canon;
+    canon_node s2c;
+    s2c.node = (*_canon_map)[s2.index];
+    (*log_out) << "U " << n1c.idx << (((n1c.complement ^ s2c.complement) ^ s2.complement) ? " 1 " : " 0 ") << s2c.idx << "\n";
+  }
+  void node_union( node const& n1, signal const& s2) {
+    canon_node n1c;
+    n1c.node = (*_canon_map)[n1];
+    canon_node s2c;
+    s2c.node = (*_canon_map)[s2.index];
+    (*log_out) << "U " << n1c.idx << (((n1c.complement ^ s2c.complement) ^ s2.complement) ? " 1 " : " 0 ") << s2c.idx << "\n";
   }
 #pragma endregion
 
 public:
-  std::shared_ptr<std::vector<int>> _canon_map;
+  std::shared_ptr<std::vector<uint32_t>> _canon_map;
   std::shared_ptr<xag_storage> _storage;
   std::shared_ptr<network_events<base_type>> _events;
 };

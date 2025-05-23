@@ -129,11 +129,7 @@ struct balancing_impl
       old_to_new[n] = { dest.create_pi(), 0u };
     } );
 
-    std::shared_ptr<depth_view<Ntk, CostFn>> depth_ntk;
-    if ( ps_.only_on_critical_path )
-    {
-      depth_ntk = std::make_shared<depth_view<Ntk, CostFn>>( ntk_ );
-    }
+    std::shared_ptr<depth_view<Ntk, CostFn>> depth_ntk = std::make_shared<depth_view<Ntk, CostFn>>( ntk_ );
 
     stopwatch<> t( st_.time_total );
     const auto cuts = cut_enumeration<Ntk, true>( ntk_, ps_.cut_enumeration_ps, &st_.cut_enumeration_st );
@@ -149,7 +145,7 @@ struct balancing_impl
         return;
       }
 
-      int nc = -1;
+      uint32_t nc = 0xFFFFFFFF;
       if constexpr (has_node_union_v<Ntk>) {
         nc = (*ntk_._canon_map)[n];
       }
@@ -186,8 +182,8 @@ struct balancing_impl
 
           if constexpr (has_node_union_v<Ntk>) {
             if (cand.level < depth_ntk->level(n)) {
-              assert(nc > 0);
-              dest.node_union(nc, dest.get_node(best.f));
+              assert(nc != 0xFFFFFFFF);
+              dest.node_union(nc, best.f);
             }
           }
         } );

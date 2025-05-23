@@ -20,9 +20,12 @@
 
 #include <experiments.hpp>
 
+std::ostream* log_out = nullptr;
+
 #define IS_TRACING 1
-#define REWRITE_CONVERGE_FIRST 0
+#define REWRITE_CONVERGE_FIRST 1
 #define MD_BEFORE_MC 0
+#define MAX_ITER 1
 
 #if IS_TRACING
 #define xag_ntk mockturtle::tracing_xag_network
@@ -381,12 +384,7 @@ std::pair<uint32_t, uint32_t> mc_opt( xag_ntk& ntk, uint32_t mc_init )
 
     if ( mc_mc_opt < mc_tmp )
     {
-      tracing_xag_network::trace_commit();
       ntk = ntk_tmp;
-    }
-    else
-    {
-      tracing_xag_network::trace_forget();
     }
   }
 #endif
@@ -402,12 +400,7 @@ std::pair<uint32_t, uint32_t> mc_opt( xag_ntk& ntk, uint32_t mc_init )
 
     ++num_ite;
     /* Rewriting in DATE20 */
-//    std::cerr << "Doing CUT REWRITING ON : "; 
-//    print_ntk_stats(ntk);
     xag_ntk ntk_tmp = cut_rewriting<xag_ntk, xag_minmc_resynthesis, mc_count>( ntk, xag_mc_resyn, ps_rewrite, nullptr );
-//    std::cerr << "After CUT REWRITING : "; 
-//    print_ntk_stats(ntk_tmp);
-    // xag_ntk ntk_tmp = ntk;
 
     // /* Refactoring in DATE20 */
     // refactoring( ntk_tmp, xag_bidec_resyn, ps_refactor, nullptr, free_xor_cost() );
@@ -417,13 +410,8 @@ std::pair<uint32_t, uint32_t> mc_opt( xag_ntk& ntk, uint32_t mc_init )
     fanout_view<xag_ntk> ntk_fo{ ntk_tmp };
     depth_view<fanout_view<xag_ntk>> ntk_resub{ ntk_fo };
     resubstitution_minmc_withDC( ntk_resub, ps_resub );
-    // #if IS_TRACING
-    //       ntk_resub.transfer_trace();
-    // #endif
 
     ntk_tmp = cleanup_dangling( ntk_tmp );
-//    std::cerr << "After RESUBSTITUTION : "; 
-//    print_ntk_stats(ntk_tmp);
 
     mc_mc_opt = costs<xag_ntk, mc_count>( ntk_tmp );
     depth_view<xag_ntk, mc_count, false> ntk_md{ ntk_tmp };
@@ -461,15 +449,11 @@ std::pair<uint32_t, uint32_t> md_opt( xag_ntk& ntk, uint32_t md_init, uint32_t m
       }
 
       ++num_ite;
-//      std::cerr << "Doing BALANCING on : "; 
-//    print_ntk_stats(ntk);
       xag_ntk ntk_tmp = mockturtle::balancing<xag_ntk, mc_count>( ntk, mockturtle::esop_rebalancing<xag_ntk>{}, balance_ps );
-//      std::cerr << "After BALANCING : "; 
-//    print_ntk_stats(ntk_tmp);
       depth_view<xag_ntk, mc_count, false> ntk_md{ ntk_tmp };
       md_esop = ntk_md.depth();
       mc_esop = costs<xag_ntk, mc_count>( ntk_tmp );
-      // fmt::print( "[i] MC : {}; MD : {}\n", mc_esop, md_esop );
+      
       if ( md_esop < md_tmp || ( md_esop == md_tmp && mc_esop < mc_tmp ) )
       {
         ntk = ntk_tmp;
@@ -500,6 +484,15 @@ int main( int argc, char** argv )
   const char* seqn_path = argv[1];
   const char* eqn_path = argv[2];
 
+  log_out = &std::cout;
+#if IS_TRACING
+  if ( argc == 4 )
+  {
+    const char* trace_path = argv[3];
+    log_out = new std::ofstream(trace_path);
+  }
+#endif
+
   ParsedSeqn seqn;
   parse_seqn( seqn_path, seqn );
   auto& ntk = seqn.ntk;
@@ -518,69 +511,62 @@ int main( int argc, char** argv )
   std::vector<uint32_t> md_path{ md_init };
   std::vector<uint32_t> mc_path{ mc_init };
   uint32_t num_ite{ 0u };
-  uint32_t max_ite{ 4u };
 
- // xag_ntk ntk_iter;
- // do
- // {
- //   if ( num_ite > 0 )
- //   {
- //     md_init = md_final;
- //     mc_init = mc_final;
- //     ntk = ntk_iter;
- //   }
- //   ntk_iter = ntk;
- //   num_ite++;
+  xag_ntk ntk_iter;
+  do
+  {
+    if ( num_ite > 0 )
+    {
+      md_init = md_final;
+      mc_init = mc_final;
+    }
+    ntk_iter = ntk;
+    num_ite++;
 
 #if MD_BEFORE_MC
-    auto [md_esop, mc_esop] = md_opt( ntk, md_init, mc_init );
+    auto [md_esop, mc_esop] = md_opt( ntk_iter, md_init, mc_init );
     md_path.push_back( md_esop );
     mc_path.push_back( mc_esop );
-    auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk, mc_esop );
+    auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk_iter, mc_esop );
     md_path.push_back( md_mc_opt );
     mc_path.push_back( mc_mc_opt );
     md_final = md_esop;
     mc_final = mc_esop;
 #else
-    auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk, mc_init );
+    auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk_iter, mc_init );
     md_path.push_back( md_mc_opt );
     mc_path.push_back( mc_mc_opt );
-    auto [md_esop, mc_esop] = md_opt( ntk, md_mc_opt, mc_mc_opt );
+    auto [md_esop, mc_esop] = md_opt( ntk_iter, md_mc_opt, mc_mc_opt );
     md_path.push_back( md_esop );
     mc_path.push_back( mc_esop );
-//    print_ntk_stats(ntk_iter);
-//    print_ntk_stats(ntk_iter);
-    // md_final = md_esop;
-    // mc_final = mc_esop;
+    md_final = md_esop;
+    mc_final = mc_esop;
 #endif
-    //fmt::print( "[{}] [i={}] ({},{}) [{}] -> ({},{}) [{}]\n", seqn_path, num_ite, md_init, mc_init, he_cost( md_init, mc_init ), md_final, mc_final, he_cost( md_final, mc_final ) );
-    // he_cost(md_final, mc_final) < he_cost(md_init, mc_init)
- // } while ( num_ite < max_ite );
+    fmt::print( "COM [{}] [i={}] ({},{}) [{}] -> ({},{}) [{}]\n", seqn_path, num_ite, md_init, mc_init, he_cost( md_init, mc_init ), md_final, mc_final, he_cost( md_final, mc_final ) );
+    if (he_cost(md_final, mc_final) >= he_cost(md_init, mc_init)) {
+      md_path.pop_back(); md_path.pop_back();
+      mc_path.pop_back(); mc_path.pop_back();
+      break;
+    } else {
+      ntk = ntk_iter;
+    }
+  } while ( num_ite < MAX_ITER );
 
-  std::stringstream status;
-  status << "COM [i] (MD,MC) : ";
+  (*log_out) << "COM [i] (MD,MC) : ";
   for ( int i = 0; i < md_path.size(); i++ )
   {
     if ( i != 0 )
     {
-      status << " -> ";
+      (*log_out) << " -> ";
     }
-    status << "(" << md_path[i] << "," << mc_path[i] << ")";
+    (*log_out) << "(" << md_path[i] << "," << mc_path[i] << ")";
   }
-  std::cout << status.str();
-#if IS_TRACING
+  #if IS_TRACING
   if ( argc == 4 )
   {
-    const char* trace_path = argv[3];
-    std::ofstream out( trace_path );
-    out << status.str();
-    out.close();
+    (static_cast<std::ofstream*>(log_out))->close();
   }
-  else
-  {
-    std::cout << status.str();
-  }
-#endif
+  #endif
 
   write_eqn( eqn_path, seqn );
 
