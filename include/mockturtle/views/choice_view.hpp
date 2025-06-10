@@ -147,7 +147,7 @@ public:
     {
       this->_choice_repr = choice_ntk._choice_repr;
       this->_choice_phase = choice_ntk._choice_phase;
-      this->_ps = choice_ntk._ps;
+      //this->_ps = choice_ntk._ps;
     }
     if ( _ps.update_on_add )
     {

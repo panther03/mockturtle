@@ -23,7 +23,7 @@
 std::ostream* log_out = nullptr;
 
 #define IS_TRACING 1
-#define REWRITE_CONVERGE_FIRST 1
+#define REWRITE_CONVERGE_FIRST 0
 #define MD_BEFORE_MC 0
 #define MAX_ITER 1
 
@@ -520,27 +520,32 @@ int main( int argc, char** argv )
       md_init = md_final;
       mc_init = mc_final;
     }
-    ntk_iter = ntk;
     num_ite++;
 
 #if MD_BEFORE_MC
-    auto [md_esop, mc_esop] = md_opt( ntk_iter, md_init, mc_init );
-    md_path.push_back( md_esop );
-    mc_path.push_back( mc_esop );
-    auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk_iter, mc_esop );
-    md_path.push_back( md_mc_opt );
-    mc_path.push_back( mc_mc_opt );
-    md_final = md_esop;
-    mc_final = mc_esop;
+    {
+      ntk_iter = ntk;
+      auto [md_esop, mc_esop] = md_opt( ntk_iter, md_init, mc_init );
+      md_path.push_back( md_esop );
+      mc_path.push_back( mc_esop );
+      auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk_iter, mc_esop );
+      md_path.push_back( md_mc_opt );
+      mc_path.push_back( mc_mc_opt );
+      md_final = md_esop;
+      mc_final = mc_esop;
+    }
 #else
-    auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk_iter, mc_init );
-    md_path.push_back( md_mc_opt );
-    mc_path.push_back( mc_mc_opt );
-    auto [md_esop, mc_esop] = md_opt( ntk_iter, md_mc_opt, mc_mc_opt );
-    md_path.push_back( md_esop );
-    mc_path.push_back( mc_esop );
-    md_final = md_esop;
-    mc_final = mc_esop;
+    {
+      ntk_iter = ntk;
+      auto [md_mc_opt, mc_mc_opt] = mc_opt( ntk_iter, mc_init );
+      md_path.push_back( md_mc_opt );
+      mc_path.push_back( mc_mc_opt );
+      auto [md_esop, mc_esop] = md_opt( ntk_iter, md_mc_opt, mc_mc_opt );
+      md_path.push_back( md_esop );
+      mc_path.push_back( mc_esop );
+      md_final = md_esop;
+      mc_final = mc_esop;  
+    }
 #endif
     fmt::print( "COM [{}] [i={}] ({},{}) [{}] -> ({},{}) [{}]\n", seqn_path, num_ite, md_init, mc_init, he_cost( md_init, mc_init ), md_final, mc_final, he_cost( md_final, mc_final ) );
     if (he_cost(md_final, mc_final) >= he_cost(md_init, mc_init)) {

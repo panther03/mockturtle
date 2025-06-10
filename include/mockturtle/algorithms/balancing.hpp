@@ -181,10 +181,10 @@ struct balancing_impl
           }
 
           if constexpr (has_node_union_v<Ntk>) {
-            if (cand.level < depth_ntk->level(n)) {
-              assert(nc != 0xFFFFFFFF);
-              dest.node_union(nc, best.f);
-            }
+            //if (cand.level < depth_ntk->level(n)) {
+            assert(nc != 0xFFFFFFFF);
+            dest.node_union(nc, best.f);
+            //}
           }
         } );
       }
